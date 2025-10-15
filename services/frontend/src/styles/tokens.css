@@ -1,0 +1,305 @@
+/**
+ * Design Tokens - Teal Charcoal Theme
+ * Bộ màu: "Bình tĩnh & Hiện đại"
+ * 
+ * Nguồn cảm hứng: Teal mang cảm giác giải pháp/kỹ trị với sand để tránh lạnh
+ */
+
+:root {
+  /* =================================================================
+     PRIMARY COLORS - Teal Charcoal Palette
+     ================================================================= */
+  
+  /* Primary - Charcoal (Text & Headings) */
+  --color-primary: #111827;
+  --color-primary-rgb: 17, 24, 39;
+  --color-primary-light: #1f2937;
+  --color-primary-lighter: #374151;
+  
+  /* Secondary - Deep Teal (Nhấn nhẹ) */
+  --color-secondary: #0F766E;
+  --color-secondary-rgb: 15, 118, 110;
+  --color-secondary-light: #14B8A6;
+  --color-secondary-dark: #0d5b54;
+  
+  /* Surface - Sand/Stone */
+  --color-surface: #E7E5E4;
+  --color-surface-rgb: 231, 229, 228;
+  --color-surface-light: #F5F5F4;
+  --color-surface-dark: #D6D3D1;
+  
+  /* CTA - Teal (Actions) */
+  --color-cta: #14B8A6;
+  --color-cta-rgb: 20, 184, 166;
+  --color-cta-hover: #0F766E;
+  --color-cta-active: #0d5b54;
+  
+  /* Accent - Copper (Nhắc nhẹ) */
+  --color-accent: #B45309;
+  --color-accent-rgb: 180, 83, 9;
+  --color-accent-light: #D97706;
+  --color-accent-dark: #92400E;
+  
+  /* Neutral - Gray */
+  --color-neutral: #6B7280;
+  --color-neutral-rgb: 107, 114, 128;
+  --color-neutral-light: #9CA3AF;
+  --color-neutral-lighter: #D1D5DB;
+  --color-neutral-dark: #4B5563;
+  
+  /* =================================================================
+     SEMANTIC COLORS
+     ================================================================= */
+  
+  /* Success */
+  --color-success: #10B981;
+  --color-success-light: #34D399;
+  --color-success-dark: #059669;
+  
+  /* Warning */
+  --color-warning: #F59E0B;
+  --color-warning-light: #FBBF24;
+  --color-warning-dark: #D97706;
+  
+  /* Error/Danger */
+  --color-error: #EF4444;
+  --color-error-light: #F87171;
+  --color-error-dark: #DC2626;
+  
+  /* Info */
+  --color-info: #14B8A6;
+  --color-info-light: #2DD4BF;
+  --color-info-dark: #0F766E;
+  
+  /* =================================================================
+     BACKGROUND COLORS
+     ================================================================= */
+  
+  --bg-primary: #F5F5F4;
+  --bg-secondary: #FFFFFF;
+  --bg-tertiary: #E7E5E4;
+  --bg-overlay: rgba(17, 24, 39, 0.5);
+  
+  /* Dark Mode Backgrounds */
+  --bg-dark-primary: #111827;
+  --bg-dark-secondary: #1F2937;
+  --bg-dark-tertiary: #374151;
+  
+  /* =================================================================
+     TEXT COLORS
+     ================================================================= */
+  
+  --text-primary: #111827;
+  --text-secondary: #6B7280;
+  --text-tertiary: #9CA3AF;
+  --text-inverse: #F5F5F4;
+  --text-on-cta: #FFFFFF;
+  
+  /* =================================================================
+     BORDER & DIVIDER COLORS
+     ================================================================= */
+  
+  --border-color: #D6D3D1;
+  --border-light: #E7E5E4;
+  --border-dark: #A8A29E;
+  --divider-color: rgba(107, 114, 128, 0.2);
+  
+  /* =================================================================
+     GLASSMORPHISM BASE COLORS
+     ================================================================= */
+  
+  --glass-bg: rgba(255, 255, 255, 0.1);
+  --glass-bg-light: rgba(255, 255, 255, 0.15);
+  --glass-bg-dark: rgba(0, 0, 0, 0.2);
+  --glass-border: rgba(255, 255, 255, 0.18);
+  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  
+  /* =================================================================
+     GRADIENT DEFINITIONS
+     ================================================================= */
+  
+  /* Primary Gradient (Teal) */
+  --gradient-primary: linear-gradient(135deg, #14B8A6 0%, #0F766E 100%);
+  --gradient-primary-reverse: linear-gradient(135deg, #0F766E 0%, #14B8A6 100%);
+  
+  /* Accent Gradient (Copper/Warm) */
+  --gradient-accent: linear-gradient(135deg, #D97706 0%, #B45309 100%);
+  
+  /* Neutral Gradient (Subtle) */
+  --gradient-neutral: linear-gradient(135deg, #F5F5F4 0%, #E7E5E4 100%);
+  
+  /* Dark Gradient */
+  --gradient-dark: linear-gradient(135deg, #1F2937 0%, #111827 100%);
+  
+  /* =================================================================
+     SHADOW DEFINITIONS
+     ================================================================= */
+  
+  --shadow-xs: 0 1px 2px 0 rgba(17, 24, 39, 0.05);
+  --shadow-sm: 0 1px 3px 0 rgba(17, 24, 39, 0.1), 0 1px 2px -1px rgba(17, 24, 39, 0.1);
+  --shadow-md: 0 4px 6px -1px rgba(17, 24, 39, 0.1), 0 2px 4px -2px rgba(17, 24, 39, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(17, 24, 39, 0.1), 0 4px 6px -4px rgba(17, 24, 39, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(17, 24, 39, 0.1), 0 8px 10px -6px rgba(17, 24, 39, 0.1);
+  --shadow-2xl: 0 25px 50px -12px rgba(17, 24, 39, 0.25);
+  
+  /* Colored Shadows */
+  --shadow-teal: 0 10px 30px rgba(15, 118, 110, 0.3);
+  --shadow-copper: 0 10px 30px rgba(180, 83, 9, 0.3);
+  
+  /* =================================================================
+     SPACING SCALE
+     ================================================================= */
+  
+  --space-1: 0.25rem;   /* 4px */
+  --space-2: 0.5rem;    /* 8px */
+  --space-3: 0.75rem;   /* 12px */
+  --space-4: 1rem;      /* 16px */
+  --space-5: 1.25rem;   /* 20px */
+  --space-6: 1.5rem;    /* 24px */
+  --space-8: 2rem;      /* 32px */
+  --space-10: 2.5rem;   /* 40px */
+  --space-12: 3rem;     /* 48px */
+  --space-16: 4rem;     /* 64px */
+  --space-20: 5rem;     /* 80px */
+  --space-24: 6rem;     /* 96px */
+  
+  /* =================================================================
+     BORDER RADIUS
+     ================================================================= */
+  
+  --radius-xs: 0.125rem;  /* 2px */
+  --radius-sm: 0.25rem;   /* 4px */
+  --radius-md: 0.5rem;    /* 8px */
+  --radius-lg: 0.75rem;   /* 12px */
+  --radius-xl: 1rem;      /* 16px */
+  --radius-2xl: 1.5rem;   /* 24px */
+  --radius-3xl: 2rem;     /* 32px */
+  --radius-full: 9999px;
+  
+  /* =================================================================
+     TYPOGRAPHY
+     ================================================================= */
+  
+  /* Font Families */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  --font-mono: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Droid Sans Mono',
+    'Source Code Pro', monospace;
+  
+  /* Font Sizes */
+  --text-xs: 0.75rem;     /* 12px */
+  --text-sm: 0.875rem;    /* 14px */
+  --text-base: 1rem;      /* 16px */
+  --text-lg: 1.125rem;    /* 18px */
+  --text-xl: 1.25rem;     /* 20px */
+  --text-2xl: 1.5rem;     /* 24px */
+  --text-3xl: 1.875rem;   /* 30px */
+  --text-4xl: 2.25rem;    /* 36px */
+  --text-5xl: 3rem;       /* 48px */
+  --text-6xl: 3.75rem;    /* 60px */
+  
+  /* Font Weights */
+  --font-light: 300;
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+  --font-extrabold: 800;
+  
+  /* Line Heights */
+  --leading-none: 1;
+  --leading-tight: 1.25;
+  --leading-snug: 1.375;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+  --leading-loose: 2;
+  
+  /* =================================================================
+     TRANSITIONS & ANIMATIONS
+     ================================================================= */
+  
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-bounce: 500ms cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  
+  /* =================================================================
+     Z-INDEX SCALE
+     ================================================================= */
+  
+  --z-base: 0;
+  --z-dropdown: 1000;
+  --z-sticky: 1020;
+  --z-fixed: 1030;
+  --z-modal-backdrop: 1040;
+  --z-modal: 1050;
+  --z-popover: 1060;
+  --z-tooltip: 1070;
+  --z-notification: 1080;
+  
+  /* =================================================================
+     BLUR & BACKDROP FILTERS
+     ================================================================= */
+  
+  --blur-sm: blur(4px);
+  --blur-base: blur(8px);
+  --blur-md: blur(12px);
+  --blur-lg: blur(16px);
+  --blur-xl: blur(24px);
+  
+  /* =================================================================
+     USER COLOR PALETTE (for captions, avatars)
+     ================================================================= */
+  
+  --user-color-1: #10B981;  /* Green */
+  --user-color-2: #3B82F6;  /* Blue */
+  --user-color-3: #A855F7;  /* Purple */
+  --user-color-4: #F59E0B;  /* Orange */
+  --user-color-5: #EC4899;  /* Pink */
+  --user-color-6: #14B8A6;  /* Teal */
+  --user-color-7: #EAB308;  /* Yellow */
+  --user-color-8: #EF4444;  /* Red */
+}
+
+/* =================================================================
+   DARK MODE OVERRIDES
+   ================================================================= */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-primary: #111827;
+    --bg-secondary: #1F2937;
+    --bg-tertiary: #374151;
+    
+    --text-primary: #F5F5F4;
+    --text-secondary: #D1D5DB;
+    --text-tertiary: #9CA3AF;
+    
+    --border-color: #374151;
+    --border-light: #4B5563;
+    --border-dark: #6B7280;
+    
+    --glass-bg: rgba(0, 0, 0, 0.3);
+    --glass-bg-light: rgba(0, 0, 0, 0.4);
+    --glass-border: rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* Explicit dark mode class for manual toggle */
+.dark {
+  --bg-primary: #111827;
+  --bg-secondary: #1F2937;
+  --bg-tertiary: #374151;
+  
+  --text-primary: #F5F5F4;
+  --text-secondary: #D1D5DB;
+  --text-tertiary: #9CA3AF;
+  
+  --border-color: #374151;
+  --border-light: #4B5563;
+  --border-dark: #6B7280;
+  
+  --glass-bg: rgba(0, 0, 0, 0.3);
+  --glass-bg-light: rgba(0, 0, 0, 0.4);
+  --glass-border: rgba(255, 255, 255, 0.1);
+}

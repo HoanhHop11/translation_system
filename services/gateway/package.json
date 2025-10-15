@@ -1,0 +1,46 @@
+{
+  "name": "jbcalling-gateway",
+  "version": "1.0.0",
+  "description": "MediaSoup WebRTC Gateway cho JB Calling Translation System",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "start": "node dist/index.js",
+    "lint": "eslint src --ext .ts",
+    "test": "jest"
+  },
+  "keywords": [
+    "webrtc",
+    "mediasoup",
+    "sfu",
+    "realtime",
+    "video-calling"
+  ],
+  "author": "JB Calling Team",
+  "license": "MIT",
+  "dependencies": {
+    "mediasoup": "^3.14.14",
+    "socket.io": "^4.8.1",
+    "express": "^4.21.2",
+    "dotenv": "^16.4.7",
+    "winston": "^3.17.0",
+    "redis": "^4.7.0",
+    "ioredis": "^5.4.2",
+    "axios": "^1.7.9"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.3",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.19.1",
+    "@typescript-eslint/parser": "^8.19.1",
+    "eslint": "^9.18.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}

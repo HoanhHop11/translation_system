@@ -1,0 +1,49 @@
+/**
+ * Global Styles - JB Calling Translation System
+ * Theme: Teal Charcoal - "Bình tĩnh & Hiện đại"
+ */
+
+/* Import Design System */
+@import './styles/tokens.css';
+@import './styles/glassmorphism.css';
+
+/* =================================================================
+   RESET & BASE STYLES
+   ================================================================= */
+
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  font-weight: var(--font-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  transition: background-color var(--transition-base), color var(--transition-base);
+}
+
+/* Dark mode background */
+body.dark {
+  background-color: var(--bg-dark-primary);
+  color: var(--text-inverse);
+}
+
+.app-container {
+  width: 100%;
+  min-height: 100vh;
+}

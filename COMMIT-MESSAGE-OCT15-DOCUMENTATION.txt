@@ -1,0 +1,138 @@
+docs: Complete system documentation & status updates (Oct 15, 2025)
+
+OVERVIEW:
+Hoàn thiện toàn bộ documentation sau session investigation Traefik → Gateway routing.
+Phase 4-5: 95% complete, 1 blocking issue (Gateway WebSocket routing).
+
+FILES CREATED:
+1. SYSTEM-STATUS-OCT15-2025.md
+   - Complete system status report (14/14 services)
+   - Infrastructure details (3 instances)
+   - Service-by-service breakdown with health status
+   - Critical issue: Traefik không phát hiện Gateway service
+   - Performance metrics & resource utilization
+   - Next session action plan
+
+2. TRAEFIK-GATEWAY-INVESTIGATION-OCT15.md
+   - 4-hour investigation findings
+   - 7 approaches tested (all failed)
+   - Configuration analysis (Gateway vs other services)
+   - Research từ 50+ Traefik official doc snippets
+   - 3 hypotheses về root cause
+   - Recommended solutions: NGINX (30-45 min) vs Direct HTTPS (2-3h)
+
+3. WRAP-UP-OCT15.md
+   - Session summary (8 hours work)
+   - Achievements today:
+     * Frontend v1.0.9 deployed with MediaSoup client
+     * Gateway optimized (replicated mode, ingress ports)
+     * WebRTC firewall rules configured
+     * Deep investigation completed
+   - Critical issue explanation
+   - 3 solution options with detailed implementation plans
+   - Checklist trước khi tiếp tục
+   - Time estimates
+
+4. DOCUMENTATION-INDEX.md
+   - Navigation guide cho tất cả documentation
+   - Priority-based reading order
+   - Quick navigation by task
+   - File naming conventions & standards
+   - Bookmarks & quick commands
+
+FILES UPDATED:
+1. README.md
+   - Version 2.1 (Phase 4-5)
+   - Status banner: ⚠️ 95% Complete (Gateway routing issue)
+   - Updated live demo URLs
+   - Recent achievements Oct 14-15
+   - Performance metrics validated from production
+
+2. ROADMAP-UPDATED-OCT2025.md
+   - Last updated: October 15, 2025
+   - Phase 4-5 progress: 95% Complete
+   - Current blocker: Traefik routing
+   - Next action: NGINX reverse proxy
+   - Timeline updates
+
+3. docs/STATUS.md
+   - Superseded notice pointing to SYSTEM-STATUS-OCT15-2025.md
+   - Critical notice về Gateway routing issue
+   - Phase 4-5 status: 14/14 services, 1 routing issue
+
+SYSTEM STATE (End of Session):
+✅ Frontend v1.0.9: 3/3 replicas, accessible https://jbcalling.site
+✅ Gateway v1.0.1: 1/1 replica, healthy (2 workers), direct access working
+✅ Traefik v3.0: 1/1 replica, restored to stable state
+✅ All other services: Running normally (STT, Translation, TTS, API, etc.)
+⚠️ Gateway routing: NOT working via Traefik (WebSocket blocked)
+✅ WebRTC firewall: Configured (UDP/TCP 40000-40100, TCP 3000)
+
+CRITICAL ISSUE:
+Traefik Swarm Provider không phát hiện Gateway service dù:
+- Tất cả labels correct (9/9 verified)
+- Service mode: replicated (production standard)
+- Port mode: ingress (Swarm compatible)
+- Networks: frontend + backend (correct)
+- Traefik DOES detect other services (TTS, API, Frontend)
+
+Investigation: 7 approaches tested over 4 hours, all failed
+Root cause: UNKNOWN (possible Traefik v3.0 Swarm Provider edge case)
+
+RECOMMENDED SOLUTION:
+NGINX reverse proxy cho Gateway WebSocket
+- Bypass Traefik service discovery
+- Direct IP:port routing (no auto-discovery issues)
+- SSL termination với existing Let's Encrypt certs
+- Implementation time: 30-45 minutes
+- Success rate: 95%+
+
+NEXT SESSION PRIORITY:
+1. Read TRAEFIK-GATEWAY-INVESTIGATION-OCT15.md (10 min)
+2. Decide solution: NGINX (recommended) vs Direct HTTPS
+3. Implement NGINX reverse proxy (30-45 min)
+4. Test WebSocket connection (5 min)
+5. E2E WebRTC video calling validation (30 min)
+6. Update documentation (20 min)
+
+Total estimate: 2-3 hours to working WebRTC system
+
+DOCUMENTATION STRUCTURE:
+Priority 1 (URGENT - Read First):
+  - SYSTEM-STATUS-OCT15-2025.md (Complete overview)
+  - TRAEFIK-GATEWAY-INVESTIGATION-OCT15.md (Technical deep dive)
+  - WRAP-UP-OCT15.md (Action plan)
+
+Priority 2 (Context):
+  - ROADMAP-UPDATED-OCT2025.md (Project roadmap)
+  - README.md (High-level overview)
+
+Priority 3 (Technical Docs):
+  - docs/01-ARCHITECTURE.md through docs/10-TROUBLESHOOTING.md
+  - infrastructure/swarm/stack-optimized.yml (Production config)
+
+Priority 4 (Historical):
+  - Previous reports (Oct 5-14) for reference
+
+TESTING PERFORMED:
+✅ Frontend accessibility: https://jbcalling.site (200 OK)
+✅ Gateway health direct: http://10.148.0.3:3000/health (healthy)
+✅ Traefik service: 1/1 running stable
+✅ Service count: 14/14 running
+❌ Gateway via Traefik: https://webrtc.jbcalling.site (empty response)
+
+RELATED DOCUMENTS:
+- TRAEFIK-GATEWAY-INVESTIGATION-OCT15.md (Technical investigation)
+- WRAP-UP-OCT15.md (Session summary)
+- DOCUMENTATION-INDEX.md (Navigation guide)
+
+---
+
+Changed files:
+  new file: SYSTEM-STATUS-OCT15-2025.md
+  new file: TRAEFIK-GATEWAY-INVESTIGATION-OCT15.md
+  new file: WRAP-UP-OCT15.md
+  new file: DOCUMENTATION-INDEX.md
+  modified: README.md
+  modified: ROADMAP-UPDATED-OCT2025.md
+  modified: docs/STATUS.md

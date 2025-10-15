@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Services Demo - Full Pipeline Test (STT + Translation + TTS)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 0.9em;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+        
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .btn-success {
+            background: #2ecc71;
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+        
+        input[type="file"] {
+            padding: 10px;
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            width: 100%;
+            cursor: pointer;
+            background: white;
+        }
+        
+        select, input[type="text"] {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1em;
+            width: 100%;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 600;
+        }
+        
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-weight: 500;
+        }
+        
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+        
+        .result-box {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 15px;
+            border: 2px solid #667eea;
+        }
+        
+        .result-box h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .result-text {
+            font-size: 1.1em;
+            line-height: 1.6;
+            color: #333;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .metric {
+            background: #667eea;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .metric-label {
+            font-size: 0.8em;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+        
+        .metric-value {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+        
+        .recording {
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        .audio-player {
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 STT Service Demo</h1>
+        <p class="subtitle">Speech-to-Text Transcription Testing Tool</p>
+        
+        <!-- Section 1: Record Audio -->
+        <div class="section">
+            <h2>📹 Option 1: Record Audio</h2>
+            <div class="controls">
+                <button id="recordBtn" class="btn-primary">🔴 Start Recording</button>
+                <button id="stopBtn" class="btn-danger" disabled>⏹️ Stop Recording</button>
+                <button id="playBtn" class="btn-secondary" disabled>▶️ Play</button>
+            </div>
+            <div id="recordStatus"></div>
+            <audio id="audioPlayer" class="audio-player" controls style="display:none;"></audio>
+        </div>
+        
+        <!-- Section 2: Upload Audio -->
+        <div class="section">
+            <h2>📁 Option 2: Upload Audio File</h2>
+            <div class="form-group">
+                <input type="file" id="fileInput" accept="audio/*,.wav,.mp3,.ogg,.webm,.m4a">
+            </div>
+            <div id="uploadStatus"></div>
+        </div>
+        
+        <!-- Section 3: Configuration -->
+        <div class="section">
+            <h2>⚙️ Configuration</h2>
+            <div class="form-group">
+                <label for="sttEndpoint">STT Service Endpoint:</label>
+                <input type="text" id="sttEndpoint" value="http://34.143.235.114:8002" placeholder="http://ip:8002">
+            </div>
+            <div class="form-group">
+                <label for="language">Language:</label>
+                <select id="language">
+                    <option value="vi">🇻🇳 Vietnamese</option>
+                    <option value="en">🇬🇧 English</option>
+                    <option value="auto">🌐 Auto Detect</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="model">Model:</label>
+                <select id="model">
+                    <option value="phowhisper">PhoWhisper (Vietnamese optimized)</option>
+                    <option value="faster-whisper">Faster Whisper (Multilingual)</option>
+                </select>
+            </div>
+        </div>
+        
+        <!-- Section 4: Transcribe -->
+        <div class="section">
+            <h2>🚀 Transcribe</h2>
+            <div class="controls">
+                <button id="transcribeBtn" class="btn-success" disabled>✨ Transcribe Audio</button>
+            </div>
+            <div id="transcribeStatus"></div>
+        </div>
+        
+        <!-- Section 5: Results -->
+        <div id="resultsSection" style="display:none;">
+            <div class="result-box">
+                <h3>📝 Transcription Result</h3>
+                <div class="result-text" id="resultText"></div>
+                
+                <div class="metrics">
+                    <div class="metric">
+                        <div class="metric-label">Processing Time</div>
+                        <div class="metric-value" id="processingTime">-</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Model Used</div>
+                        <div class="metric-value" id="modelUsed">-</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Language</div>
+                        <div class="metric-value" id="detectedLang">-</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Segments</div>
+                        <div class="metric-value" id="segmentCount">-</div>
+                    </div>
+                </div>
+                
+                <details style="margin-top: 20px;">
+                    <summary style="cursor: pointer; color: #667eea; font-weight: 600;">📊 View Detailed Segments</summary>
+                    <div id="segmentDetails" style="margin-top: 10px;"></div>
+                </details>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let recordedBlob = null;
+        let uploadedBlob = null;
+        
+        const recordBtn = document.getElementById('recordBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const playBtn = document.getElementById('playBtn');
+        const transcribeBtn = document.getElementById('transcribeBtn');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const fileInput = document.getElementById('fileInput');
+        
+        // Check microphone permission
+        async function checkMicrophonePermission() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach(track => track.stop());
+                return true;
+            } catch (err) {
+                showStatus('recordStatus', 'error', '❌ Microphone access denied. Please enable microphone permission.');
+                return false;
+            }
+        }
+        
+        // Start recording
+        recordBtn.addEventListener('click', async () => {
+            if (!await checkMicrophonePermission()) return;
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        channelCount: 1,
+                        sampleRate: 16000,
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    }
+                });
+                
+                audioChunks = [];
+                mediaRecorder = new MediaRecorder(stream);
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+                
+                mediaRecorder.onstop = async () => {
+                    recordedBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    const audioUrl = URL.createObjectURL(recordedBlob);
+                    audioPlayer.src = audioUrl;
+                    audioPlayer.style.display = 'block';
+                    playBtn.disabled = false;
+                    transcribeBtn.disabled = false;
+                    
+                    showStatus('recordStatus', 'success', '✅ Recording completed! ' + (recordedBlob.size / 1024).toFixed(2) + ' KB');
+                    
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                
+                mediaRecorder.start();
+                recordBtn.disabled = true;
+                stopBtn.disabled = false;
+                showStatus('recordStatus', 'info', '🔴 Recording... Speak now!', true);
+                
+            } catch (err) {
+                showStatus('recordStatus', 'error', '❌ Error: ' + err.message);
+            }
+        });
+        
+        // Stop recording
+        stopBtn.addEventListener('click', () => {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                recordBtn.disabled = false;
+                stopBtn.disabled = true;
+            }
+        });
+        
+        // Play recorded audio
+        playBtn.addEventListener('click', () => {
+            audioPlayer.play();
+        });
+        
+        // Handle file upload
+        fileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                uploadedBlob = file;
+                recordedBlob = null; // Clear recorded audio
+                
+                const audioUrl = URL.createObjectURL(file);
+                audioPlayer.src = audioUrl;
+                audioPlayer.style.display = 'block';
+                playBtn.disabled = false;
+                transcribeBtn.disabled = false;
+                
+                showStatus('uploadStatus', 'success', 
+                    `✅ File loaded: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`);
+            }
+        });
+        
+        // Transcribe audio
+        transcribeBtn.addEventListener('click', async () => {
+            const blob = uploadedBlob || recordedBlob;
+            if (!blob) {
+                showStatus('transcribeStatus', 'error', '❌ No audio to transcribe!');
+                return;
+            }
+            
+            const endpoint = document.getElementById('sttEndpoint').value;
+            const language = document.getElementById('language').value;
+            const model = document.getElementById('model').value;
+            
+            transcribeBtn.disabled = true;
+            showStatus('transcribeStatus', 'info', '⏳ Transcribing... Please wait...', true);
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', blob, 'audio.webm');
+                if (language !== 'auto') {
+                    formData.append('language', language);
+                }
+                formData.append('model', model);
+                
+                const startTime = Date.now();
+                const response = await fetch(`${endpoint}/transcribe`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const endTime = Date.now();
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                const totalTime = (endTime - startTime) / 1000;
+                
+                showStatus('transcribeStatus', 'success', 
+                    `✅ Transcription completed in ${totalTime.toFixed(2)}s (Server: ${result.processing_time.toFixed(2)}s)`);
+                
+                displayResults(result, totalTime);
+                
+            } catch (err) {
+                showStatus('transcribeStatus', 'error', '❌ Error: ' + err.message);
+            } finally {
+                transcribeBtn.disabled = false;
+            }
+        });
+        
+        // Display results
+        function displayResults(result, totalTime) {
+            document.getElementById('resultsSection').style.display = 'block';
+            document.getElementById('resultText').textContent = result.text || 'No transcription available';
+            document.getElementById('processingTime').textContent = result.processing_time.toFixed(2) + 's';
+            document.getElementById('modelUsed').textContent = result.model;
+            document.getElementById('detectedLang').textContent = result.language.toUpperCase();
+            document.getElementById('segmentCount').textContent = result.segments ? result.segments.length : 0;
+            
+            // Display segments
+            if (result.segments && result.segments.length > 0) {
+                const segmentDetails = document.getElementById('segmentDetails');
+                segmentDetails.innerHTML = result.segments.map((seg, idx) => `
+                    <div style="background: #f8f9fa; padding: 10px; margin: 5px 0; border-radius: 5px; border-left: 3px solid #667eea;">
+                        <strong>Segment ${idx + 1}</strong> 
+                        [${seg.start.toFixed(2)}s - ${seg.end.toFixed(2)}s]: ${seg.text}
+                    </div>
+                `).join('');
+            }
+            
+            // Scroll to results
+            document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        // Show status message
+        function showStatus(elementId, type, message, isRecording = false) {
+            const element = document.getElementById(elementId);
+            element.className = `status ${type}`;
+            if (isRecording) {
+                element.classList.add('recording');
+            }
+            element.textContent = message;
+        }
+        
+        // Check if endpoint is accessible
+        async function checkEndpoint() {
+            const endpoint = document.getElementById('sttEndpoint').value;
+            try {
+                const response = await fetch(`${endpoint}/health`);
+                if (response.ok) {
+                    const health = await response.json();
+                    console.log('STT Service Health:', health);
+                }
+            } catch (err) {
+                console.warn('Cannot reach STT endpoint:', err.message);
+            }
+        }
+        
+        // Initialize
+        checkEndpoint();
+    </script>
+</body>
+</html>

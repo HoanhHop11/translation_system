@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎯 AI Services Pipeline Demo - Full Test Suite</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2.2em;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1em;
+        }
+        
+        .pipeline-diagram {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin: 30px 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-radius: 15px;
+        }
+        
+        .pipeline-step {
+            padding: 15px 25px;
+            background: white;
+            border-radius: 10px;
+            font-weight: 600;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            color: #667eea;
+        }
+        
+        .pipeline-arrow {
+            font-size: 2em;
+            color: #667eea;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .service-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .service-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            border-top: 4px solid #667eea;
+        }
+        
+        .service-card h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+        
+        .service-card .endpoint {
+            font-size: 0.85em;
+            color: #666;
+            background: #f0f0f0;
+            padding: 5px 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            word-break: break-all;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .service-card .status {
+            padding: 8px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+        
+        .service-card .status.checking {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .service-card .status.online {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .service-card .status.offline {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+        
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+        
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-primary { background: #667eea; color: white; }
+        .btn-danger { background: #e74c3c; color: white; }
+        .btn-success { background: #2ecc71; color: white; }
+        .btn-secondary { background: #95a5a6; color: white; }
+        .btn-info { background: #3498db; color: white; }
+        .btn-warning { background: #f39c12; color: white; }
+        
+        input[type="file"] {
+            padding: 10px;
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            width: 100%;
+            cursor: pointer;
+            background: white;
+        }
+        
+        select, input[type="text"], textarea {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1em;
+            width: 100%;
+        }
+        
+        textarea {
+            min-height: 100px;
+            font-family: inherit;
+            resize: vertical;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 600;
+        }
+        
+        .status-message {
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-weight: 500;
+        }
+        
+        .status-message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .status-message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status-message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status-message.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+        
+        .result-box {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 15px;
+            border: 2px solid #667eea;
+        }
+        
+        .result-box h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+        
+        .result-text {
+            font-size: 1.1em;
+            line-height: 1.6;
+            color: #333;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .metric {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .metric-label {
+            font-size: 0.75em;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+        
+        .metric-value {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+        
+        .recording {
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        .audio-player {
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        .pipeline-result {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .step-result {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .step-result h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .step-result .content {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 0.95em;
+        }
+        
+        details {
+            margin-top: 15px;
+            cursor: pointer;
+        }
+        
+        summary {
+            font-weight: 600;
+            color: #667eea;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 5px;
+        }
+        
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 AI Services Pipeline Demo</h1>
+        <p class="subtitle">Full Test Suite: Speech-to-Text → Translation → Text-to-Speech</p>
+        
+        <!-- Pipeline Diagram -->
+        <div class="pipeline-diagram">
+            <div class="pipeline-step">🎤 STT</div>
+            <div class="pipeline-arrow">→</div>
+            <div class="pipeline-step">🌐 Translation</div>
+            <div class="pipeline-arrow">→</div>
+            <div class="pipeline-step">🔊 TTS</div>
+        </div>
+        
+        <!-- Services Status -->
+        <div class="section">
+            <h2>📡 Services Status</h2>
+            <div class="service-grid">
+                <div class="service-card">
+                    <h3>🎤 STT Service</h3>
+                    <div class="endpoint" id="sttEndpoint">https://stt.jbcalling.site</div>
+                    <div class="status checking" id="sttStatus">⏳ Checking...</div>
+                </div>
+                <div class="service-card">
+                    <h3>🌐 Translation Service</h3>
+                    <div class="endpoint" id="translateEndpoint">https://translate.jbcalling.site</div>
+                    <div class="status checking" id="translateStatus">⏳ Checking...</div>
+                </div>
+                <div class="service-card">
+                    <h3>🔊 TTS Service</h3>
+                    <div class="endpoint" id="ttsEndpoint">https://tts.jbcalling.site</div>
+                    <div class="status checking" id="ttsStatus">⏳ Checking...</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Test 1: STT Only -->
+        <div class="section">
+            <h2>🎤 Test 1: Speech-to-Text (STT)</h2>
+            <div class="controls">
+                <button id="recordBtn" class="btn-primary">🔴 Record Audio</button>
+                <button id="stopBtn" class="btn-danger" disabled>⏹️ Stop</button>
+                <button id="playBtn" class="btn-secondary" disabled>▶️ Play</button>
+            </div>
+            <div class="form-group">
+                <label>Or upload audio file:</label>
+                <input type="file" id="fileInput" accept="audio/*,.wav,.mp3,.ogg,.webm,.m4a">
+            </div>
+            <audio id="audioPlayer" class="audio-player" controls style="display:none;"></audio>
+            <div class="form-group">
+                <label for="sttModel">STT Model:</label>
+                <select id="sttModel">
+                    <option value="phowhisper">PhoWhisper (Vietnamese optimized)</option>
+                    <option value="faster-whisper">Faster Whisper (Multilingual)</option>
+                </select>
+            </div>
+            <button id="testSttBtn" class="btn-success" disabled>✨ Test STT Only</button>
+            <div id="sttResult"></div>
+        </div>
+        
+        <!-- Test 2: Translation Only -->
+        <div class="section">
+            <h2>🌐 Test 2: Translation</h2>
+            <div class="form-group">
+                <label for="translateText">Input Text:</label>
+                <textarea id="translateText" placeholder="Enter text to translate...">Xin chào, hôm nay trời đẹp quá!</textarea>
+            </div>
+            <div class="form-group">
+                <label for="sourceLang">Source Language:</label>
+                <select id="sourceLang">
+                    <option value="vi">🇻🇳 Vietnamese</option>
+                    <option value="en">🇬🇧 English</option>
+                    <option value="ja">🇯🇵 Japanese</option>
+                    <option value="ko">🇰🇷 Korean</option>
+                    <option value="zh">🇨🇳 Chinese</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="targetLang">Target Language:</label>
+                <select id="targetLang">
+                    <option value="en">🇬🇧 English</option>
+                    <option value="vi">🇻🇳 Vietnamese</option>
+                    <option value="ja">🇯🇵 Japanese</option>
+                    <option value="ko">🇰🇷 Korean</option>
+                    <option value="zh">🇨🇳 Chinese</option>
+                </select>
+            </div>
+            <button id="testTranslateBtn" class="btn-success">✨ Test Translation Only</button>
+            <div id="translateResult"></div>
+        </div>
+        
+        <!-- Test 3: TTS Only -->
+        <div class="section">
+            <h2>🔊 Test 3: Text-to-Speech (TTS)</h2>
+            <div class="form-group">
+                <label for="ttsText">Input Text:</label>
+                <textarea id="ttsText" placeholder="Enter text to synthesize...">Hello, this is a test of the text to speech system.</textarea>
+            </div>
+            <div class="form-group">
+                <label for="ttsLang">Language:</label>
+                <select id="ttsLang">
+                    <option value="en">🇬🇧 English</option>
+                    <option value="vi">🇻🇳 Vietnamese</option>
+                    <option value="ja">🇯🇵 Japanese</option>
+                    <option value="ko">🇰🇷 Korean</option>
+                    <option value="zh">🇨🇳 Chinese</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="ttsEngine">TTS Engine:</label>
+                <select id="ttsEngine">
+                    <option value="gtts">gTTS (Fast, Google voices)</option>
+                    <option value="xtts">XTTS v2 (Slow, Voice cloning - requires speaker sample)</option>
+                </select>
+            </div>
+            <div class="form-group" id="speakerSampleGroup" style="display:none;">
+                <label for="speakerSample">Speaker Sample (for XTTS):</label>
+                <input type="file" id="speakerSample" accept="audio/*">
+                <small style="color: #666;">Upload 10-30s audio sample of target voice</small>
+            </div>
+            <button id="testTtsBtn" class="btn-success">✨ Test TTS Only</button>
+            <audio id="ttsAudioPlayer" class="audio-player" controls style="display:none;"></audio>
+            <div id="ttsResult"></div>
+        </div>
+        
+        <!-- Test 4: Full Pipeline -->
+        <div class="section">
+            <h2>🚀 Test 4: Full Pipeline (STT → Translation → TTS)</h2>
+            <p style="color: #666; margin-bottom: 15px;">
+                Record/upload audio → transcribe → translate → synthesize speech in target language
+            </p>
+            <div class="form-group">
+                <label for="pipelineTargetLang">Target Language for Translation & TTS:</label>
+                <select id="pipelineTargetLang">
+                    <option value="en">🇬🇧 English</option>
+                    <option value="vi">🇻🇳 Vietnamese</option>
+                    <option value="ja">🇯🇵 Japanese</option>
+                    <option value="ko">🇰🇷 Korean</option>
+                </select>
+            </div>
+            <button id="testPipelineBtn" class="btn-warning" disabled>🎯 Run Full Pipeline</button>
+            <div id="pipelineResult"></div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration - HTTPS Endpoints
+        const CONFIG = {
+            stt: 'https://stt.jbcalling.site',
+            translation: 'https://translate.jbcalling.site',
+            tts: 'https://tts.jbcalling.site'
+        };
+        
+        console.log('🎯 AI Services Demo - HTTPS Endpoints');
+        console.log('STT:', CONFIG.stt);
+        console.log('Translation:', CONFIG.translation);
+        console.log('TTS:', CONFIG.tts);
+        
+        // Global state
+        let mediaRecorder;
+        let audioChunks = [];
+        let recordedBlob = null;
+        let uploadedBlob = null;
+        
+        // DOM elements
+        const recordBtn = document.getElementById('recordBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const playBtn = document.getElementById('playBtn');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const fileInput = document.getElementById('fileInput');
+        
+        // Test buttons
+        const testSttBtn = document.getElementById('testSttBtn');
+        const testTranslateBtn = document.getElementById('testTranslateBtn');
+        const testTtsBtn = document.getElementById('testTtsBtn');
+        const testPipelineBtn = document.getElementById('testPipelineBtn');
+        
+        // Show/hide speaker sample for XTTS
+        document.getElementById('ttsEngine').addEventListener('change', (e) => {
+            document.getElementById('speakerSampleGroup').style.display = 
+                e.target.value === 'xtts' ? 'block' : 'none';
+        });
+        
+        // ==============================================================
+        // UTILITY FUNCTIONS
+        // ==============================================================
+        
+        function showStatus(elementId, type, message, isLoading = false) {
+            const element = document.getElementById(elementId);
+            element.className = `status-message ${type}`;
+            if (isLoading) {
+                element.classList.add('recording');
+            }
+            element.innerHTML = message;
+        }
+        
+        function showServiceStatus(service, isOnline, info = '') {
+            const statusEl = document.getElementById(`${service}Status`);
+            statusEl.className = `status ${isOnline ? 'online' : 'offline'}`;
+            statusEl.textContent = isOnline ? `✅ Online ${info}` : '❌ Offline';
+        }
+        
+        // ==============================================================
+        // SERVICE HEALTH CHECKS
+        // ==============================================================
+        
+        async function checkServices() {
+            // Check STT
+            try {
+                const response = await fetch(`${CONFIG.stt}/health`);
+                if (response.ok) {
+                    const data = await response.json();
+                    showServiceStatus('stt', true, `(${data.model_info?.model_size || 'ready'})`);
+                } else {
+                    showServiceStatus('stt', false);
+                }
+            } catch (err) {
+                showServiceStatus('stt', false);
+            }
+            
+            // Check Translation
+            try {
+                const response = await fetch(`${CONFIG.translation}/health`);
+                if (response.ok) {
+                    const data = await response.json();
+                    showServiceStatus('translate', true, data.redis_cache === 'connected' ? '(cached)' : '');
+                } else {
+                    showServiceStatus('translate', false);
+                }
+            } catch (err) {
+                showServiceStatus('translate', false);
+            }
+            
+            // Check TTS
+            try {
+                const response = await fetch(`${CONFIG.tts}/health`);
+                if (response.ok) {
+                    const data = await response.json();
+                    const engines = Object.keys(data.engines || {}).join(', ');
+                    showServiceStatus('tts', true, `(${engines})`);
+                } else {
+                    showServiceStatus('tts', false);
+                }
+            } catch (err) {
+                showServiceStatus('tts', false);
+            }
+        }
+        
+        // ==============================================================
+        // AUDIO RECORDING
+        // ==============================================================
+        
+        recordBtn.addEventListener('click', async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        channelCount: 1,
+                        sampleRate: 16000,
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    }
+                });
+                
+                audioChunks = [];
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'audio/webm'
+                });
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+                
+                mediaRecorder.onstop = async () => {
+                    recordedBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    uploadedBlob = null;
+                    const audioUrl = URL.createObjectURL(recordedBlob);
+                    audioPlayer.src = audioUrl;
+                    audioPlayer.style.display = 'block';
+                    playBtn.disabled = false;
+                    testSttBtn.disabled = false;
+                    testPipelineBtn.disabled = false;
+                    
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                
+                mediaRecorder.start();
+                recordBtn.disabled = true;
+                stopBtn.disabled = false;
+                
+            } catch (err) {
+                alert('Microphone error: ' + err.message);
+            }
+        });
+        
+        stopBtn.addEventListener('click', () => {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                recordBtn.disabled = false;
+                stopBtn.disabled = true;
+            }
+        });
+        
+        playBtn.addEventListener('click', () => {
+            audioPlayer.play();
+        });
+        
+        fileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                uploadedBlob = file;
+                recordedBlob = null;
+                
+                const audioUrl = URL.createObjectURL(file);
+                audioPlayer.src = audioUrl;
+                audioPlayer.style.display = 'block';
+                playBtn.disabled = false;
+                testSttBtn.disabled = false;
+                testPipelineBtn.disabled = false;
+            }
+        });
+        
+        // ==============================================================
+        // TEST 1: STT ONLY
+        // ==============================================================
+        
+        testSttBtn.addEventListener('click', async () => {
+            const blob = uploadedBlob || recordedBlob;
+            if (!blob) return;
+            
+            const model = document.getElementById('sttModel').value;
+            testSttBtn.disabled = true;
+            showStatus('sttResult', 'info', '⏳ Transcribing...', true);
+            
+            try {
+                const formData = new FormData();
+                formData.append('audio', blob, 'audio.webm');
+                // Gửi tham số prefer_model để user chọn model cụ thể
+                formData.append('prefer_model', model);
+                // Optional: add language hint if needed
+                // formData.append('language', 'vi');
+                
+                const startTime = Date.now();
+                const response = await fetch(`${CONFIG.stt}/transcribe`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const endTime = Date.now();
+                
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const result = await response.json();
+                const totalTime = (endTime - startTime) / 1000;
+                
+                let html = `
+                    <div class="result-box">
+                        <h3>📝 Transcription Result</h3>
+                        <div class="result-text">${result.text || 'No text'}</div>
+                        <div class="metrics">
+                            <div class="metric">
+                                <div class="metric-label">Total Time</div>
+                                <div class="metric-value">${totalTime.toFixed(2)}s</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">Processing</div>
+                                <div class="metric-value">${result.processing_time?.toFixed(2) || '-'}s</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">Model</div>
+                                <div class="metric-value">${result.model || '-'}</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">Language</div>
+                                <div class="metric-value">${result.language?.toUpperCase() || '-'}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                showStatus('sttResult', 'success', html);
+                
+            } catch (err) {
+                showStatus('sttResult', 'error', `❌ Error: ${err.message}`);
+            } finally {
+                testSttBtn.disabled = false;
+            }
+        });
+        
+        // ==============================================================
+        // TEST 2: TRANSLATION ONLY
+        // ==============================================================
+        
+        testTranslateBtn.addEventListener('click', async () => {
+            const text = document.getElementById('translateText').value.trim();
+            if (!text) {
+                alert('Please enter text to translate');
+                return;
+            }
+            
+            const sourceLang = document.getElementById('sourceLang').value;
+            const targetLang = document.getElementById('targetLang').value;
+            
+            if (sourceLang === targetLang) {
+                alert('Source and target languages must be different');
+                return;
+            }
+            
+            testTranslateBtn.disabled = true;
+            showStatus('translateResult', 'info', '⏳ Translating...', true);
+            
+            try {
+                const startTime = Date.now();
+                const response = await fetch(`${CONFIG.translation}/translate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: text,
+                        src_lang: sourceLang,
+                        tgt_lang: targetLang
+                    })
+                });
+                const endTime = Date.now();
+                
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const result = await response.json();
+                const totalTime = (endTime - startTime) / 1000;
+                
+                let html = `
+                    <div class="result-box">
+                        <h3>🌐 Translation Result</h3>
+                        <div class="result-text">${result.translated_text || 'No translation'}</div>
+                        <div class="metrics">
+                            <div class="metric">
+                                <div class="metric-label">Total Time</div>
+                                <div class="metric-value">${totalTime.toFixed(2)}s</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">Processing</div>
+                                <div class="metric-value">${result.processing_time?.toFixed(3) || '-'}s</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">Cached</div>
+                                <div class="metric-value">${result.cached ? '✅' : '❌'}</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">Speedup</div>
+                                <div class="metric-value">${result.speedup ? result.speedup + 'x' : '-'}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                showStatus('translateResult', 'success', html);
+                
+            } catch (err) {
+                showStatus('translateResult', 'error', `❌ Error: ${err.message}`);
+            } finally {
+                testTranslateBtn.disabled = false;
+            }
+        });
+        
+        // ==============================================================
+        // TEST 3: TTS ONLY
+        // ==============================================================
+        
+        testTtsBtn.addEventListener('click', async () => {
+            const text = document.getElementById('ttsText').value.trim();
+            if (!text) {
+                alert('Please enter text to synthesize');
+                return;
+            }
+            
+            const language = document.getElementById('ttsLang').value;
+            const engine = document.getElementById('ttsEngine').value;
+            
+            testTtsBtn.disabled = true;
+            showStatus('ttsResult', 'info', '⏳ Synthesizing...', true);
+            
+            try {
+                const body = {
+                    text: text,
+                    language: language,
+                    engine: engine
+                };
+                
+                // Handle XTTS speaker sample
+                if (engine === 'xtts') {
+                    const speakerFile = document.getElementById('speakerSample').files[0];
+                    if (!speakerFile) {
+                        alert('XTTS requires a speaker sample audio file');
+                        testTtsBtn.disabled = false;
+                        return;
+                    }
+                    // TODO: Upload speaker sample first, then use returned speaker_id
+                    showStatus('ttsResult', 'warning', '⚠️ XTTS implementation requires speaker upload endpoint');
+                    testTtsBtn.disabled = false;
+                    return;
+                }
+                
+                const startTime = Date.now();
+                const response = await fetch(`${CONFIG.tts}/synthesize`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const endTime = Date.now();
+                
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const result = await response.json();
+                const totalTime = (endTime - startTime) / 1000;
+                
+                // Play audio
+                if (result.audio_base64) {
+                    const audioBlob = base64ToBlob(result.audio_base64, 'audio/mpeg');
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    const ttsPlayer = document.getElementById('ttsAudioPlayer');
+                    ttsPlayer.src = audioUrl;
+                    ttsPlayer.style.display = 'block';
+                    ttsPlayer.play();
+                }
+                
+                let html = `
+                    <div class="result-box">
+                        <h3>🔊 TTS Result</h3>
+                        <div class="metrics">
+                            <div class="metric">
+                                <div class="metric-label">Total Time</div>
+                                <div class="metric-value">${totalTime.toFixed(2)}s</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">Processing</div>
+                                <div class="metric-value">${result.processing_time?.toFixed(3) || '-'}s</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">Cached</div>
+                                <div class="metric-value">${result.cached ? '✅' : '❌'}</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">Audio Size</div>
+                                <div class="metric-value">${(result.audio_base64?.length / 1024 || 0).toFixed(1)} KB</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                showStatus('ttsResult', 'success', html);
+                
+            } catch (err) {
+                showStatus('ttsResult', 'error', `❌ Error: ${err.message}`);
+            } finally {
+                testTtsBtn.disabled = false;
+            }
+        });
+        
+        // ==============================================================
+        // TEST 4: FULL PIPELINE
+        // ==============================================================
+        
+        testPipelineBtn.addEventListener('click', async () => {
+            const blob = uploadedBlob || recordedBlob;
+            if (!blob) return;
+            
+            const targetLang = document.getElementById('pipelineTargetLang').value;
+            
+            testPipelineBtn.disabled = true;
+            showStatus('pipelineResult', 'info', '⏳ Running full pipeline...', true);
+            
+            const pipelineData = {
+                step1: null,
+                step2: null,
+                step3: null,
+                timings: {}
+            };
+            
+            try {
+                // STEP 1: STT
+                showStatus('pipelineResult', 'info', '🎤 Step 1/3: Transcribing audio...', true);
+                const formData = new FormData();
+                formData.append('audio', blob, 'audio.webm');
+                
+                let start = Date.now();
+                const sttResponse = await fetch(`${CONFIG.stt}/transcribe`, {
+                    method: 'POST',
+                    body: formData
+                });
+                pipelineData.timings.stt = (Date.now() - start) / 1000;
+                
+                if (!sttResponse.ok) throw new Error(`STT failed: ${sttResponse.status}`);
+                pipelineData.step1 = await sttResponse.json();
+                
+                const transcribedText = pipelineData.step1.text;
+                const sourceLang = pipelineData.step1.language;
+                
+                // STEP 2: Translation
+                showStatus('pipelineResult', 'info', '🌐 Step 2/3: Translating text...', true);
+                
+                start = Date.now();
+                const translateResponse = await fetch(`${CONFIG.translation}/translate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: transcribedText,
+                        src_lang: sourceLang,
+                        tgt_lang: targetLang
+                    })
+                });
+                pipelineData.timings.translation = (Date.now() - start) / 1000;
+                
+                if (!translateResponse.ok) throw new Error(`Translation failed: ${translateResponse.status}`);
+                pipelineData.step2 = await translateResponse.json();
+                
+                const translatedText = pipelineData.step2.translated_text;
+                
+                // STEP 3: TTS
+                showStatus('pipelineResult', 'info', '🔊 Step 3/3: Synthesizing speech...', true);
+                
+                start = Date.now();
+                const ttsResponse = await fetch(`${CONFIG.tts}/synthesize`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: translatedText,
+                        language: targetLang,
+                        engine: 'gtts'
+                    })
+                });
+                pipelineData.timings.tts = (Date.now() - start) / 1000;
+                
+                if (!ttsResponse.ok) throw new Error(`TTS failed: ${ttsResponse.status}`);
+                pipelineData.step3 = await ttsResponse.json();
+                
+                // Calculate totals
+                const totalTime = pipelineData.timings.stt + pipelineData.timings.translation + pipelineData.timings.tts;
+                
+                // Display results
+                let html = `
+                    <div class="pipeline-result">
+                        <h3>✅ Pipeline Completed!</h3>
+                        
+                        <div class="step-result">
+                            <h4>🎤 Step 1: Speech-to-Text</h4>
+                            <div class="content">
+                                <strong>Original Text (${sourceLang}):</strong><br>
+                                ${transcribedText}
+                            </div>
+                            <div style="margin-top:10px; font-size:0.9em; color:#666;">
+                                ⏱️ ${pipelineData.timings.stt.toFixed(2)}s
+                            </div>
+                        </div>
+                        
+                        <div class="step-result">
+                            <h4>🌐 Step 2: Translation</h4>
+                            <div class="content">
+                                <strong>Translated Text (${targetLang}):</strong><br>
+                                ${translatedText}
+                            </div>
+                            <div style="margin-top:10px; font-size:0.9em; color:#666;">
+                                ⏱️ ${pipelineData.timings.translation.toFixed(2)}s
+                                ${pipelineData.step2.cached ? ' • ✅ Cached' : ''}
+                            </div>
+                        </div>
+                        
+                        <div class="step-result">
+                            <h4>🔊 Step 3: Text-to-Speech</h4>
+                            <div class="content">
+                                <audio controls autoplay style="width:100%;" id="pipelineAudio"></audio>
+                            </div>
+                            <div style="margin-top:10px; font-size:0.9em; color:#666;">
+                                ⏱️ ${pipelineData.timings.tts.toFixed(2)}s
+                                ${pipelineData.step3.cached ? ' • ✅ Cached' : ''}
+                            </div>
+                        </div>
+                        
+                        <div class="metrics">
+                            <div class="metric">
+                                <div class="metric-label">Total Time</div>
+                                <div class="metric-value">${totalTime.toFixed(2)}s</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">STT</div>
+                                <div class="metric-value">${pipelineData.timings.stt.toFixed(2)}s</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">Translation</div>
+                                <div class="metric-value">${pipelineData.timings.translation.toFixed(2)}s</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">TTS</div>
+                                <div class="metric-value">${pipelineData.timings.tts.toFixed(2)}s</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('pipelineResult').innerHTML = html;
+                
+                // Play TTS audio
+                if (pipelineData.step3.audio_base64) {
+                    const audioBlob = base64ToBlob(pipelineData.step3.audio_base64, 'audio/mpeg');
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    document.getElementById('pipelineAudio').src = audioUrl;
+                }
+                
+            } catch (err) {
+                showStatus('pipelineResult', 'error', `❌ Pipeline failed: ${err.message}`);
+            } finally {
+                testPipelineBtn.disabled = false;
+            }
+        });
+        
+        // ==============================================================
+        // HELPER FUNCTIONS
+        // ==============================================================
+        
+        function base64ToBlob(base64, mimeType) {
+            const byteCharacters = atob(base64);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            return new Blob([byteArray], { type: mimeType });
+        }
+        
+        // ==============================================================
+        // INITIALIZATION
+        // ==============================================================
+        
+        checkServices();
+        setInterval(checkServices, 30000); // Check every 30 seconds
+    </script>
+</body>
+</html>

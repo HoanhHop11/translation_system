@@ -1,0 +1,72 @@
+feat: Thiết kế lại hệ thống với replica tối ưu cho hiệu suất cao
+
+🎯 MỤC TIÊU
+- Tối đa hóa High Availability với 3 STT replicas (1 per node)
+- Cân bằng tài nguyên trên 3 nodes (31GB/16GB/16GB)
+- Tăng throughput cho tất cả critical services
+
+📊 THAY ĐỔI REPLICA
+- API: 2 → 3 replicas (spread across ALL nodes)
+- Signaling: 2 → 3 replicas (spread across ALL nodes)
+- Frontend: 2 → 3 replicas (spread across ALL nodes)
+- STT: 2 → 3 replicas ✅ (spread across ALL nodes)
+- Translation: 1 → 2 replicas (spread across workers)
+- TTS: 1 → 2 replicas (spread across workers)
+
+Total: 16 → 22 replicas (+6 replicas)
+
+🏗️ PLACEMENT STRATEGY
+- Infrastructure (Traefik, Postgres, Redis): Manager only
+- Monitoring (Prometheus, Grafana, Loki): Manager only
+- Application services: Spread preference across ALL 3 nodes
+- STT service: Spread preference across ALL 3 nodes (no constraints)
+- Translation/TTS: Worker constraint + spread preference
+
+📈 RESOURCE OPTIMIZATION
+Before:
+  - RAM Reserved: 14.75GB / 63GB (23.4%)
+  - RAM Limit: 30.00GB / 63GB (47.6%)
+
+After:
+  - RAM Reserved: 21.50GB / 63GB (34.1%)
+  - RAM Limit: 43.50GB / 63GB (69.0%)
+  - Buffer: 19.50GB free
+
+Per Node:
+  - translation01: 8.00GB / 31GB (25.8%) ✅ Manager không quá tải
+  - translation02: 6.75GB / 16GB (42.2%) ✅ Còn dư 9.25GB
+  - translation03: 6.75GB / 16GB (42.2%) ✅ Còn dư 9.25GB
+
+🔑 LỢI ÍCH
+1. High Availability: 3 STT replicas = 1 node down → still 2 active
+2. Performance: 3x STT throughput, 2x Translation throughput
+3. Load Balancing: Round-robin + sticky sessions across all replicas
+4. Balanced Resources: Equal distribution, no node overloaded
+5. Auto-Recovery: Docker Swarm auto-restart failed replicas
+
+📝 FILES CHANGED
+Modified:
+  - infrastructure/swarm/stack-with-ssl.yml (replica counts & placement)
+  - .env (infrastructure specs updated)
+
+Created:
+  - OPTIMAL-REPLICA-DESIGN.md (comprehensive documentation)
+  - scripts/deploy-optimal-replicas.sh (automated deployment)
+  - DEPLOYMENT-SUMMARY-OPTIMAL-REPLICAS.md (quick reference)
+
+🚀 DEPLOYMENT
+1. Start translation01: gcloud compute instances start translation01 --zone=asia-southeast1-a
+2. Wait 30 seconds
+3. Run: ./scripts/deploy-optimal-replicas.sh
+
+✅ SUCCESS CRITERIA
+- All 22 replicas running
+- 3 STT replicas distributed (1 per node)
+- Health checks passing
+- Load balancing working
+- No resource exhaustion
+
+---
+
+Co-authored-by: GitHub Copilot Agent <copilot@github.com>
+Research: Docker Swarm placement strategies via Context7

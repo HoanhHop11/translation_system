@@ -1,0 +1,439 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.pytype/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pyright/
+
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn
+.pnp.*
+package-lock.json
+yarn.lock
+.next/
+out/
+.nuxt/
+dist/
+.cache/
+
+# Environment Variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.production
+.env.staging
+*.env
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+
+# Secrets and Credentials (⚠️ CRITICAL)
+**/secrets/
+**/credentials/
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+*.cer
+service-account.json
+gcp-key.json
+aws-credentials
+.aws/
+.gcp/
+
+# Private Documentation (⚠️ CRITICAL)
+docs/00-REQUIRED-INFO.md
+docs/*-PRIVATE.md
+docs/*.private.md
+**/PRIVATE-*.md
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+*.sql
+*.dump
+data/
+pgdata/
+
+# Redis
+*.rdb
+*.aof
+redis-data/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.npm
+*.log.*
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*.bak
+*.tmp
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+.metadata/
+
+# JetBrains
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# Visual Studio Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.history/
+
+# Models (Too large for git)
+models/
+*.bin
+*.onnx
+*.pt
+*.pth
+*.h5
+*.safetensors
+*.msgpack
+*.pb
+*.tflite
+
+# Audio/Video files
+*.wav
+*.mp3
+*.mp4
+*.avi
+*.mov
+*.flv
+*.mkv
+*.m4a
+*.ogg
+*.opus
+audio_samples/
+video_samples/
+recordings/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+.tmp/
+
+# Backup files
+*.backup
+*.bak
+*.old
+backups/
+
+# Testing
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.tox/
+coverage/
+test-results/
+junit.xml
+.nyc_output/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Documentation builds
+docs/_build/
+docs/.doctrees/
+site/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Certificate files
+*.crt
+*.key
+*.pem
+*.p12
+*.pfx
+ssl/
+certs/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+
+# Monitoring data
+prometheus-data/
+grafana-data/
+elasticsearch-data/
+
+# Generated files
+generated/
+auto-generated/
+*.generated.*
+
+# Cache directories
+.cache/
+cache/
+.parcel-cache/
+
+# Uploads
+uploads/
+user-uploads/
+documents/
+
+# Voice embeddings (contains user voice data)
+voice-embeddings/
+voice-samples/
+
+# Compiled source
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+
+# Compressed files (except in docs for distribution)
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Mac
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# Backup files from editors
+*~
+*.swp
+*.swo
+*.swn
+\#*\#
+.\#*
+
+# Configuration overrides (user-specific)
+config.local.yml
+config.override.yml
+docker-compose.override.yml
+.env.override
+
+# Local scripts (might contain sensitive info)
+local-scripts/
+my-scripts/
+test-scripts/
+
+# Database dumps
+*.dump
+*.sql
+*.bak
+dump/
+
+# Redis dumps
+dump.rdb
+appendonly.aof
+
+# Kubernetes secrets
+secrets.yml
+secrets.yaml
+*-secret.yml
+*-secret.yaml
+
+# Ansible vault
+vault.yml
+*.vault
+
+# Sensitive docs that might be created
+CREDENTIALS.md
+SECRETS.md
+KEYS.md
+PASSWORDS.md
+TODO-PRIVATE.md
+
+# User-specific IDE configs
+.vscode/settings.json
+.vscode/launch.json
+.idea/workspace.xml
+.idea/tasks.xml
+
+# Benchmark results (can be large)
+benchmarks/results/
+*.benchmark
+
+# Profile results
+*.prof
+*.profile
+
+# Memory dumps
+*.hprof
+core.*
+
+# Exception files
+exceptions/
+crashes/
+
+# Migration files (might contain sensitive data in production)
+# migrations/versions/*.py  # Uncomment if needed
+
+# Alembic
+alembic.ini.local
+
+# Lock files (optional, comment out if you want to track)
+# poetry.lock
+# Pipfile.lock
+
+# Operating system files
+.Spotlight-V100
+.Trashes
+
+# Cloud provider configs
+.gcloud/
+.azure/
+
+# Local development certificates
+localhost.crt
+localhost.key
+dev-cert.*
+
+# SSH keys (just in case someone tries to commit)
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+known_hosts
+
+# GPG keys
+*.gpg
+*.asc
+*.sig
+
+# API keys file (might be created by accident)
+api-keys.txt
+tokens.txt
+credentials.txt
+
+# Development databases
+dev.db
+test.db
+local.db
+
+# Local Docker volumes data
+volumes/
+
+# Helm
+charts/*.tgz
+
+# Serverless
+.serverless/
+
+# DynamoDB Local
+.dynamodb/
+
+# End of .gitignore

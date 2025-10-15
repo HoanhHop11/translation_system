@@ -1,0 +1,33 @@
+# TTS Service Requirements - MVP Version (gTTS only)
+# Coqui TTS sẽ được thêm sau khi MVP stable
+
+# Core dependencies
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-multipart==0.0.20
+
+# TTS engine - Fast & Lightweight
+gtts==2.5.4                # Google Text-to-Speech (fast, 200-300ms)
+
+# Audio processing
+numpy<2.0.0
+soundfile==0.12.1
+pydub==0.25.1
+librosa==0.10.2
+
+# Redis for caching (redis 5.x has built-in asyncio support)
+redis==5.2.1
+
+# Monitoring
+prometheus-client==0.21.0
+
+# Optional: Nếu muốn thêm Coqui TTS sau này:
+# coqui-tts==0.27.2         # XTTS v2 for voice cloning (add when needed)
+
+# Utilities
+pydantic==2.10.3
+pydantic-settings==2.6.1
+python-json-logger==3.2.1
+
+# Monitoring
+prometheus-client==0.21.0

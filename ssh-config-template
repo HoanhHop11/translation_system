@@ -1,0 +1,45 @@
+# SSH Config cho JB Calling Translation Cluster
+# File: ~/.ssh/config (trên tất cả 3 instances)
+
+Host translation01
+    HostName 10.148.0.5
+    User hopboy2003
+    IdentityFile ~/.ssh/id_ed25519_swarm
+    StrictHostKeyChecking no
+    UserKnownHostsFile=/dev/null
+
+Host translation02
+    HostName 10.148.0.3
+    User hopboy2003
+    IdentityFile ~/.ssh/id_ed25519_swarm
+    StrictHostKeyChecking no
+    UserKnownHostsFile=/dev/null
+
+Host translation03
+    HostName 10.148.0.4
+    User hopboy2003
+    IdentityFile ~/.ssh/id_ed25519_swarm
+    StrictHostKeyChecking no
+    UserKnownHostsFile=/dev/null
+
+# External IPs (for backup)
+Host translation01-ext
+    HostName 34.143.235.114
+    User hopboy2003
+    IdentityFile ~/.ssh/id_ed25519_swarm
+    StrictHostKeyChecking no
+    UserKnownHostsFile=/dev/null
+
+Host translation02-ext
+    HostName 34.142.190.250
+    User hopboy2003
+    IdentityFile ~/.ssh/id_ed25519_swarm
+    StrictHostKeyChecking no
+    UserKnownHostsFile=/dev/null
+
+Host translation03-ext
+    HostName 34.126.138.3
+    User hopboy2003
+    IdentityFile ~/.ssh/id_ed25519_swarm
+    StrictHostKeyChecking no
+    UserKnownHostsFile=/dev/null

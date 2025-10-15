@@ -1,0 +1,116 @@
+docs: Update copilot-instructions.md với documentation inheritance guidelines
+
+OVERVIEW:
+Cập nhật copilot-instructions.md để Agent có thể kế thừa và update documentation tốt hơn.
+Bổ sung guidelines chi tiết về quy trình đọc, update, và maintain documentation.
+
+CHANGES TO copilot-instructions.md:
+
+1. SECTION 5: ĐỌC VÀ KẾ THỪA TÀI LIỆU CÓ SẴN (NEW)
+   - Quy trình đọc tài liệu (5 steps)
+   - Quy tắc update documentation
+   - Naming conventions cho documentation files
+   - Format chuẩn:
+     * System Status: SYSTEM-STATUS-OCT<DD>-2025.md
+     * Investigation: <TOPIC>-INVESTIGATION-OCT<DD>.md
+     * Session Wrap-up: WRAP-UP-OCT<DD>.md
+     * Roadmap: ROADMAP-UPDATED-OCT2025.md
+     * Commit Message: COMMIT-MESSAGE-OCT<DD>-<TOPIC>.txt
+
+2. Updated Project Info:
+   - Phase hiện tại: Phase 4-5 (95% - Gateway routing issue)
+   - Latest Status: SYSTEM-STATUS-OCT15-2025.md
+   - Updated instance configurations:
+     * translation01: c4d-standard-4 (4 vCPUs, 30GB RAM)
+     * Added External/Internal IPs
+     * Updated firewall rules (WebRTC ports)
+
+3. Updated Quy trình Làm việc:
+   - Step 2: ĐỌC TÀI LIỆU HIỆN CÓ (emphasized)
+   - Check DOCUMENTATION-INDEX.md → latest status
+   - Added steps 11-12 (update docs, commit message)
+
+4. SECTION: Documentation Kế Thừa & Cập Nhật (NEW - 150+ lines)
+   
+   a) Quy tắc Đọc Documentation:
+      - LUÔN check DOCUMENTATION-INDEX.md trước
+      - Đọc theo thứ tự Priority (1-4)
+      - Identify latest status files
+   
+   b) Quy tắc Update Documentation:
+      - Khi update status reports (5 steps)
+      - Khi kết thúc session (4 tasks)
+      - Khi investigation/troubleshooting (3 tasks)
+   
+   c) Documentation Structure Standards:
+      - File headers (required format)
+      - Superseded notices (template)
+      - Status indicators (consistent icons)
+   
+   d) File Retention Policy:
+      - Keep: Latest status, investigations, wrap-ups, roadmap
+      - Archive: Old status (>1 month), superseded reports
+      - Delete: Duplicates, unfinished drafts, scratch files
+   
+   e) Quick Reference Checklist:
+      - Khi bắt đầu làm việc (5 checks)
+      - Khi kết thúc làm việc (6 tasks)
+
+BENEFITS:
+✅ Agent hiểu rõ documentation structure
+✅ Tránh tạo file trùng lặp
+✅ Update documentation theo chuẩn nhất quán
+✅ Dễ dàng tìm và đọc tài liệu cũ
+✅ Maintain documentation quality cao
+✅ Onboarding nhanh cho team members mới
+
+EXAMPLES ADDED:
+
+File Headers:
+```markdown
+# Title
+**Date**: October DD, 2025
+**Status**: [Active|Superseded|Historical]
+**Phase**: Phase X-Y
+**Related**: [Links to other docs]
+```
+
+Superseded Notices:
+```markdown
+> ⚠️ Superseded Notice (2025-10-DD)
+> This document has been superseded by [NEW-FILE.md].
+```
+
+Status Indicators:
+✅ ⚠️ ❌ ⏸️ 🔴 🎯 📊 🚀 🔬
+
+TESTING:
+✅ Verified markdown formatting
+✅ Checked all section references
+✅ Validated file naming patterns
+✅ Reviewed against actual documentation structure
+
+RELATED FILES:
+- DOCUMENTATION-INDEX.md (navigation guide)
+- SYSTEM-STATUS-OCT15-2025.md (latest status)
+- WRAP-UP-OCT15.md (session summary)
+- TRAEFIK-GATEWAY-INVESTIGATION-OCT15.md (investigation example)
+
+NEXT ACTIONS:
+Agent sẽ:
+1. Check DOCUMENTATION-INDEX.md trước khi làm việc
+2. Đọc latest SYSTEM-STATUS-OCT*.md
+3. Follow naming conventions khi tạo docs mới
+4. Add superseded notices khi update
+5. Maintain documentation index
+
+---
+
+Changed files:
+  modified: .github/copilot-instructions.md
+    - Added Section 5: ĐỌC VÀ KẾ THỪA TÀI LIỆU CÓ SẴN
+    - Updated project info (phase, instances, IPs)
+    - Updated quy trình làm việc
+    - Added Documentation Kế Thừa & Cập Nhật section
+    - Added file retention policy
+    - Added quick reference checklists

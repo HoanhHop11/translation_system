@@ -1,0 +1,452 @@
+/**
+ * Glassmorphism Design System
+ * 
+ * Hệ thống thiết kế hiện đại với glass effect, depth, và lighting
+ */
+
+/* =================================================================
+   BASE GLASS STYLES
+   ================================================================= */
+
+/**
+ * Glass component cơ bản
+ * Sử dụng: class="glass"
+ */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: var(--blur-base);
+  -webkit-backdrop-filter: var(--blur-base);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: var(--radius-xl);
+}
+
+/* Variants */
+.glass-light {
+  background: var(--glass-bg-light);
+  backdrop-filter: var(--blur-md);
+  -webkit-backdrop-filter: var(--blur-md);
+}
+
+.glass-dark {
+  background: var(--glass-bg-dark);
+  backdrop-filter: var(--blur-lg);
+  -webkit-backdrop-filter: var(--blur-lg);
+}
+
+.glass-subtle {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: var(--blur-sm);
+  -webkit-backdrop-filter: var(--blur-sm);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* =================================================================
+   DEPTH & LAYERING
+   ================================================================= */
+
+/**
+ * Multi-layer shadows để tạo depth
+ */
+.glass-elevated {
+  box-shadow: 
+    0 8px 32px 0 rgba(31, 38, 135, 0.37),
+    0 2px 8px 0 rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.2);
+}
+
+.glass-elevated-lg {
+  box-shadow: 
+    0 12px 48px 0 rgba(31, 38, 135, 0.45),
+    0 4px 16px 0 rgba(0, 0, 0, 0.15),
+    inset 0 2px 0 0 rgba(255, 255, 255, 0.25);
+}
+
+.glass-floating {
+  box-shadow: 
+    0 20px 60px -12px rgba(31, 38, 135, 0.5),
+    0 8px 24px -8px rgba(0, 0, 0, 0.2),
+    inset 0 2px 0 0 rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+/* =================================================================
+   INTERACTIVE STATES
+   ================================================================= */
+
+/**
+ * Hover effects với glow và lift
+ */
+.glass-interactive {
+  transition: all var(--transition-base);
+  cursor: pointer;
+}
+
+.glass-interactive:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 
+    0 12px 48px 0 rgba(31, 38, 135, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.3);
+}
+
+.glass-interactive:active {
+  transform: translateY(0);
+  box-shadow: 
+    0 4px 16px 0 rgba(31, 38, 135, 0.3),
+    inset 0 2px 4px 0 rgba(0, 0, 0, 0.1);
+}
+
+/* Focus states */
+.glass-interactive:focus-visible {
+  outline: 2px solid var(--color-cta);
+  outline-offset: 2px;
+}
+
+/* =================================================================
+   COLORED GLASS VARIANTS
+   ================================================================= */
+
+/**
+ * Glass với màu sắc theme
+ */
+.glass-teal {
+  background: rgba(15, 118, 110, 0.1);
+  border: 1px solid rgba(15, 118, 110, 0.2);
+  box-shadow: 0 8px 32px 0 rgba(15, 118, 110, 0.2);
+}
+
+.glass-teal-light {
+  background: rgba(20, 184, 166, 0.1);
+  border: 1px solid rgba(20, 184, 166, 0.2);
+}
+
+.glass-copper {
+  background: rgba(180, 83, 9, 0.1);
+  border: 1px solid rgba(180, 83, 9, 0.2);
+  box-shadow: 0 8px 32px 0 rgba(180, 83, 9, 0.2);
+}
+
+.glass-neutral {
+  background: rgba(107, 114, 128, 0.1);
+  border: 1px solid rgba(107, 114, 128, 0.15);
+}
+
+.glass-success {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.glass-warning {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.glass-error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+/* =================================================================
+   BORDER STYLES
+   ================================================================= */
+
+/**
+ * Border variants cho glass components
+ */
+.glass-border-thick {
+  border-width: 2px;
+}
+
+.glass-border-gradient {
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  position: relative;
+}
+
+.glass-border-gradient::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.3) 0%, 
+    rgba(255, 255, 255, 0.1) 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, 
+                linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* =================================================================
+   FROSTED VARIATIONS
+   ================================================================= */
+
+/**
+ * Frosted glass với blur mạnh hơn
+ */
+.frosted {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.frosted-dark {
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: saturate(150%) blur(20px);
+  -webkit-backdrop-filter: saturate(150%) blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* =================================================================
+   GLASS PANELS & CONTAINERS
+   ================================================================= */
+
+/**
+ * Pre-built glass containers
+ */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: var(--blur-base);
+  -webkit-backdrop-filter: var(--blur-base);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-2xl);
+  padding: var(--space-6);
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-card {
+  background: var(--glass-bg-light);
+  backdrop-filter: var(--blur-md);
+  -webkit-backdrop-filter: var(--blur-md);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-lg);
+  transition: all var(--transition-base);
+}
+
+.glass-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-2xl);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* =================================================================
+   GLASS BUTTONS
+   ================================================================= */
+
+/**
+ * Button styles với glass effect
+ */
+.glass-btn {
+  background: var(--glass-bg);
+  backdrop-filter: var(--blur-base);
+  -webkit-backdrop-filter: var(--blur-base);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-6);
+  color: var(--text-primary);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+.glass-btn:hover::before {
+  width: 300px;
+  height: 300px;
+}
+
+.glass-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(31, 38, 135, 0.3);
+}
+
+.glass-btn:active {
+  transform: translateY(0);
+}
+
+/* Button variants */
+.glass-btn-primary {
+  background: rgba(20, 184, 166, 0.2);
+  border-color: rgba(20, 184, 166, 0.3);
+  color: var(--color-cta);
+}
+
+.glass-btn-primary:hover {
+  background: rgba(20, 184, 166, 0.3);
+  box-shadow: var(--shadow-teal);
+}
+
+/* =================================================================
+   GLASS OVERLAYS
+   ================================================================= */
+
+/**
+ * Overlay cho modals, dropdowns
+ */
+.glass-overlay {
+  background: rgba(17, 24, 39, 0.6);
+  backdrop-filter: var(--blur-lg);
+  -webkit-backdrop-filter: var(--blur-lg);
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal-backdrop);
+}
+
+.glass-modal {
+  background: var(--glass-bg-light);
+  backdrop-filter: var(--blur-xl);
+  -webkit-backdrop-filter: var(--blur-xl);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-2xl);
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+/* =================================================================
+   GLASS NAVIGATION
+   ================================================================= */
+
+/**
+ * Navigation bar với glass effect
+ */
+.glass-nav {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+}
+
+.glass-sidebar {
+  background: var(--glass-bg);
+  backdrop-filter: var(--blur-lg);
+  -webkit-backdrop-filter: var(--blur-lg);
+  border-right: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-xl);
+}
+
+/* =================================================================
+   GLASS UTILITIES
+   ================================================================= */
+
+/**
+ * Utility classes cho glass effects
+ */
+.blur-sm { backdrop-filter: var(--blur-sm); }
+.blur-base { backdrop-filter: var(--blur-base); }
+.blur-md { backdrop-filter: var(--blur-md); }
+.blur-lg { backdrop-filter: var(--blur-lg); }
+.blur-xl { backdrop-filter: var(--blur-xl); }
+
+/* Glow effects */
+.glow-teal {
+  box-shadow: 0 0 20px rgba(15, 118, 110, 0.5);
+}
+
+.glow-copper {
+  box-shadow: 0 0 20px rgba(180, 83, 9, 0.5);
+}
+
+.glow-white {
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+}
+
+/* =================================================================
+   ANIMATIONS
+   ================================================================= */
+
+/**
+ * Glass-specific animations
+ */
+@keyframes glass-shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+.glass-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: glass-shimmer 2s infinite;
+}
+
+@keyframes glass-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.glass-pulse {
+  animation: glass-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* =================================================================
+   RESPONSIVE UTILITIES
+   ================================================================= */
+
+/**
+ * Responsive glass adjustments
+ */
+@media (max-width: 768px) {
+  .glass-panel {
+    padding: var(--space-4);
+    border-radius: var(--radius-xl);
+  }
+  
+  .glass-modal {
+    max-width: 95vw;
+    border-radius: var(--radius-lg);
+  }
+}
+
+/* Reduce blur on low-end devices */
+@media (prefers-reduced-motion: reduce) {
+  .glass,
+  .glass-light,
+  .glass-dark,
+  .frosted,
+  .frosted-dark {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(255, 255, 255, 0.15);
+  }
+}

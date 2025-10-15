@@ -1,0 +1,19 @@
+http:
+  routers:
+    gateway:
+      rule: "Host(`webrtc.jbcalling.site`)"
+      service: gateway
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    gateway:
+      loadBalancer:
+        servers:
+          - url: "http://10.148.0.3:3000"  # translation02 Gateway IP
+        healthCheck:
+          path: "/health"
+          interval: "10s"
+          timeout: "3s"

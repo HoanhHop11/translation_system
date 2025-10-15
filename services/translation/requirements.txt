@@ -1,0 +1,25 @@
+# Translation Service Requirements
+# Core dependencies
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+
+# Transformers and translation
+transformers==4.47.1
+torch==2.5.1
+sentencepiece==0.2.0
+protobuf==5.29.2
+accelerate==1.2.1
+
+# Quantization (INT8 for CPU optimization)
+optimum-quanto>=0.2.0
+
+# Redis for caching (redis 5.x has built-in asyncio support)
+redis==5.2.1
+
+# Utilities
+pydantic==2.10.3
+pydantic-settings==2.6.1
+python-json-logger==3.2.1
+
+# Monitoring
+prometheus-client==0.21.0
