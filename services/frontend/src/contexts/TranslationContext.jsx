@@ -25,6 +25,9 @@ import { ENV } from '../config/env';
 
 const TranslationContext = createContext();
 
+// Feature flag: use Gateway ASR captions for remote participants (skip remote STT)
+const USE_GATEWAY_ASR = true;
+
 // Convert PCM Int16Array to base64 for streaming STT API
 const pcm16ToBase64 = (pcmData) => {
   const uint8Array = new Uint8Array(pcmData.buffer);
@@ -154,6 +157,12 @@ export const TranslationProvider = ({ children }) => {
   const setupParticipantTranslation = useCallback(async (participantId, audioTrack) => {
     if (!enabled) {
       console.log(`⏸️ Translation disabled, skipping setup for ${participantId}`);
+      return;
+    }
+
+    // Khi dùng Gateway ASR, bỏ qua setup cho remote (giữ tùy chọn local mic)
+    if (USE_GATEWAY_ASR && participantId !== myParticipantId) {
+      console.log(`⏭️ Skipping remote STT setup for ${participantId} (Gateway ASR mode)`);
       return;
     }
 
@@ -749,6 +758,45 @@ export const TranslationProvider = ({ children }) => {
   }, []);
 
   /**
+   * Ingest caption từ Gateway (ASR server) và chạy MT/TTS per-viewer
+   */
+  const ingestGatewayCaption = useCallback(async (caption) => {
+    try {
+      if (!enabled) return;
+      if (!caption || !caption.text || caption.text.trim() === '') return;
+
+      const normalizedText = normalizeCapitalization(caption.text.trim());
+      const sourceLanguage = caption.language || 'auto';
+
+      // Translate nếu bật
+      const translated = await translateText(normalizedText, sourceLanguage, targetLanguage);
+
+      // TTS nếu bật và không phải self
+      if (ttsEnabled && caption.speakerId && caption.speakerId !== myParticipantId) {
+        const audioBase64 = await synthesizeSpeech(translated, targetLanguage);
+        await ttsPlaybackService.playTranslatedAudio(caption.speakerId, audioBase64, {
+          immediate: true,
+          onStart: () => handleTTSAudioStart(),
+          onEnd: () => handleTTSAudioEnd()
+        });
+      }
+
+      const nextCaption = {
+        id: caption.id || `${caption.speakerId || 'unknown'}-${caption.timestamp || Date.now()}`,
+        participantId: caption.speakerId,
+        text: normalizedText,
+        translatedText: translated,
+        timestamp: caption.timestamp || Date.now(),
+        language: sourceLanguage
+      };
+
+      setCaptions(prev => [...prev.slice(-9), nextCaption]);
+    } catch (err) {
+      console.error('❌ ingestGatewayCaption error:', err);
+    }
+  }, [enabled, targetLanguage, ttsEnabled, myParticipantId]);
+
+  /**
    * Get translation stats
    */
   const getStats = useCallback(() => {
@@ -789,6 +837,7 @@ export const TranslationProvider = ({ children }) => {
     setupParticipantTranslation,
     stopParticipantTranslation,
     clearCaptions,
+    ingestGatewayCaption,
     getStats,
 
     // Services (expose for advanced usage)

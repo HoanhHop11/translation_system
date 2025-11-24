@@ -94,7 +94,8 @@ export default function RoomMeet() {
     enabled: translationEnabled,
     captions,
     setupParticipantTranslation,
-    participantSettings
+    participantSettings,
+    ingestGatewayCaption
   } = useTranslation();
   const [connectionQuality, setConnectionQuality] = useState('good');
   const [latency, setLatency] = useState(0);
@@ -232,6 +233,15 @@ export default function RoomMeet() {
     return () => clearTimeout(timeout);
   }, [transcriptions, captionMode]);
 
+  // Ingest gateway captions vào TranslationContext để chạy MT/TTS per-viewer
+  useEffect(() => {
+    if (!translationEnabled) return;
+    if (transcriptions.length === 0) return;
+    const latest = transcriptions[transcriptions.length - 1];
+    if (!latest.isFinal) return;
+    ingestGatewayCaption(latest);
+  }, [transcriptions, translationEnabled, ingestGatewayCaption]);
+
   useEffect(() => {
     if (!socket) return;
     const pingInterval = setInterval(() => {
@@ -361,12 +371,11 @@ export default function RoomMeet() {
 
     // 2. Setup remote translation
     remoteStreams.forEach((stream, remoteId) => {
-      if (!participantSettings.has(remoteId)) {
-        const audioTrack = stream.getAudioTracks()[0];
-        if (audioTrack) {
-          console.log('🎧 Setting up translation for remote stream:', remoteId);
-          setupParticipantTranslation(remoteId, audioTrack);
-        }
+      if (participantSettings.has(remoteId)) return;
+      const audioTrack = stream.getAudioTracks()[0];
+      if (audioTrack) {
+        console.log('🎧 Setting up translation for remote stream:', remoteId);
+        setupParticipantTranslation(remoteId, audioTrack);
       }
     });
   }, [translationEnabled, localStream, remoteStreams, participantId, participantSettings, setupParticipantTranslation]);

@@ -9,12 +9,16 @@
  * - Production-ready (NO MOCK/DEMO)
  */
 
-import { Producer } from 'mediasoup/node/lib/types';
+import { Producer, Router, PlainTransport, Consumer } from 'mediasoup/node/lib/types';
 import { logger } from '../logger';
 import { AudioStreamBuffer } from '../types';
 import axios from 'axios';
 import { EventEmitter } from 'events';
 import { SileroVADProcessor } from '../utils/SileroVAD';
+import * as dgram from 'dgram';
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore - opusscript does not ship typings
+import OpusScript from 'opusscript';
 
 export class AudioProcessor extends EventEmitter {
   private activeStreams: Map<string, AudioStreamBuffer> = new Map();
@@ -24,10 +28,11 @@ export class AudioProcessor extends EventEmitter {
 
   // Audio buffer settings cho low-latency
   private readonly BUFFER_SIZE_MS = 100; // 100ms chunks cho real-time
-  private readonly SAMPLE_RATE = 48000; // MediaSoup default
+  private readonly INPUT_SAMPLE_RATE = 48000; // MediaSoup default Opus sample rate
+  private readonly OUTPUT_SAMPLE_RATE = 16000; // Target for STT
   private readonly CHANNELS = 1; // Mono cho STT
   private readonly BYTES_PER_SAMPLE = 2; // 16-bit PCM
-  private readonly BUFFER_SIZE_BYTES = (this.SAMPLE_RATE * this.BUFFER_SIZE_MS) / 1000 * this.CHANNELS * this.BYTES_PER_SAMPLE;
+  private readonly BUFFER_SIZE_BYTES = (this.OUTPUT_SAMPLE_RATE * this.BUFFER_SIZE_MS) / 1000 * this.CHANNELS * this.BYTES_PER_SAMPLE;
 
   constructor() {
     super();
@@ -40,7 +45,7 @@ export class AudioProcessor extends EventEmitter {
     logger.info('✅ AudioProcessor initialized', {
       sttServiceUrl: this.sttServiceUrl,
       bufferSizeMs: this.BUFFER_SIZE_MS,
-      sampleRate: this.SAMPLE_RATE,
+      sampleRate: this.OUTPUT_SAMPLE_RATE,
     });
 
     // Start background processing loop
@@ -62,7 +67,7 @@ export class AudioProcessor extends EventEmitter {
   /**
    * Start streaming audio từ producer (TỰ ĐỘNG, KHÔNG CẦN USER BẤM NÚT)
    */
-  async startStreaming(roomId: string, participantId: string, producer: Producer): Promise<void> {
+  async startStreaming(roomId: string, participantId: string, producer: Producer, router: Router): Promise<void> {
     try {
       if (producer.kind !== 'audio') {
         logger.warn('Producer is not audio, skipping streaming', { producerId: producer.id });
@@ -75,31 +80,66 @@ export class AudioProcessor extends EventEmitter {
         producerId: producer.id,
       });
 
+      // Tạo UDP socket local để nhận RTP từ PlainTransport
+      const udpSocket = dgram.createSocket('udp4');
+      await new Promise<void>((resolve) => udpSocket.bind(0, '127.0.0.1', () => resolve()));
+      const udpInfo = udpSocket.address();
+      const rtpPort = typeof udpInfo === 'object' ? udpInfo.port : undefined;
+
+      // PlainTransport để forward RTP từ Producer tới UDP socket (localhost)
+      const plainTransport: PlainTransport = await router.createPlainTransport({
+        listenIp: '127.0.0.1',
+        rtcpMux: true,
+        comedia: false,
+      });
+
+      // Consume producer trên PlainTransport để forward RTP
+      const consumer: Consumer = await plainTransport.consume({
+        producerId: producer.id,
+        rtpCapabilities: router.rtpCapabilities,
+        paused: false,
+      });
+
+      await plainTransport.connect({
+        ip: '127.0.0.1',
+        port: rtpPort,
+      });
+
+      // Resume consumer để bắt đầu gửi RTP
+      await consumer.resume();
+
+      // Khởi tạo decoder Opus 48k → PCM16
+      const decoder = new OpusScript(this.INPUT_SAMPLE_RATE, this.CHANNELS, OpusScript.Application.AUDIO);
+
       // Initialize buffer cho participant này
       const streamBuffer: AudioStreamBuffer = {
         roomId,
         participantId,
         producerId: producer.id,
         buffer: [],
-        sampleRate: this.SAMPLE_RATE,
+        sampleRate: this.OUTPUT_SAMPLE_RATE,
         channels: this.CHANNELS,
         lastProcessedAt: Date.now(),
+        transport: plainTransport,
+        consumer,
+        decoder,
+        udpPort: rtpPort,
       };
+
+      // Lưu UDP socket ngoài type chuẩn
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (streamBuffer as any).udpSocket = udpSocket;
 
       this.activeStreams.set(participantId, streamBuffer);
 
-      // ⚠️ CRITICAL: Audio tap - MediaSoup sẽ gọi callback này MỖI KHI có RTP packet
-      // User KHÔNG CẦN bấm nút gì cả!
-      // NOTE: MediaSoup v3 Producer không có 'rtp' event trực tiếp
-      // Thay vào đó, ta sử dụng RtpObserver hoặc PlainTransport
-      // TODO: Implement proper RTP capture mechanism với PlainTransport hoặc custom Observer
-      // Tạm thời comment out để build thành công
-
-      /*
-      producer.observer.on('rtp', (rtpPacket: any) => {
-        this.handleRtpPacket(participantId, rtpPacket);
+      // Lắng nghe RTP từ UDP socket
+      udpSocket.on('message', (packet: Buffer) => {
+        this.handleRtpPacket(participantId, packet);
       });
-      */
+
+      udpSocket.on('error', (err) => {
+        logger.error('UDP socket error for participant', { participantId, err });
+      });
 
       // Notify STT service về stream mới
       await this.notifySTTStreamStart(roomId, participantId);
@@ -114,7 +154,7 @@ export class AudioProcessor extends EventEmitter {
   /**
    * Handle RTP packet từ MediaSoup (tự động được gọi)
    */
-  private handleRtpPacket(participantId: string, rtpPacket: any): void {
+  private handleRtpPacket(participantId: string, rtpPacket: Buffer): void {
     const streamBuffer = this.activeStreams.get(participantId);
     if (!streamBuffer) {
       return;
@@ -122,16 +162,24 @@ export class AudioProcessor extends EventEmitter {
 
     try {
       // Extract audio payload từ RTP packet
-      const audioPayload = rtpPacket.payload;
+      const audioPayload = this.extractPayload(rtpPacket);
 
       if (!audioPayload || audioPayload.length === 0) {
         return;
       }
 
-      // ⚠️ NOTE: RTP payload từ MediaSoup thường là Opus encoded
-      // Trong production, cần decode Opus → PCM trước khi gửi STT
-      // Tạm thời buffer raw payload, sẽ decode trong processing loop
-      streamBuffer.buffer.push(Buffer.from(audioPayload));
+      const pcm16 = this.decodeOpusToPcm16(audioPayload, streamBuffer.decoder);
+      if (!pcm16 || pcm16.length === 0) {
+        return;
+      }
+
+      // Downsample 48k → 16k (STT yêu cầu 16kHz)
+      const downsampled = this.downsampleTo16k(pcm16);
+      if (downsampled.length === 0) {
+        return;
+      }
+
+      streamBuffer.buffer.push(Buffer.from(downsampled.buffer));
 
       // Update timestamp
       streamBuffer.lastProcessedAt = Date.now();
@@ -148,6 +196,85 @@ export class AudioProcessor extends EventEmitter {
     this.processingInterval = setInterval(() => {
       this.processAudioBuffers();
     }, this.BUFFER_SIZE_MS);
+  }
+
+  /**
+   * Parse RTP packet to extract Opus payload
+   */
+  private extractPayload(rtpPacket: Buffer): Buffer | null {
+    if (rtpPacket.length < 12) {
+      return null;
+    }
+
+    const csrcCount = rtpPacket[0] & 0x0f;
+    const extension = (rtpPacket[0] & 0x10) > 0;
+    let offset = 12 + csrcCount * 4;
+
+    if (extension) {
+      if (rtpPacket.length < offset + 4) {
+        return null;
+      }
+      const extensionLength = rtpPacket.readUInt16BE(offset + 2);
+      offset += 4 + extensionLength * 4;
+    }
+
+    if (offset >= rtpPacket.length) {
+      return null;
+    }
+
+    return rtpPacket.subarray(offset);
+  }
+
+  /**
+   * Decode Opus payload to PCM16 48k mono
+   */
+  private decodeOpusToPcm16(payload: Buffer, decoder: any): Int16Array | null {
+    try {
+      const decoded = decoder.decode(payload);
+      return this.toInt16Array(decoded);
+    } catch (error) {
+      logger.error('Opus decode error', error);
+      return null;
+    }
+  }
+
+  private toInt16Array(decoded: any): Int16Array {
+    if (decoded instanceof Int16Array) {
+      return decoded;
+    }
+    if (decoded instanceof Float32Array) {
+      const out = new Int16Array(decoded.length);
+      for (let i = 0; i < decoded.length; i++) {
+        let sample = Math.max(-1, Math.min(1, decoded[i]));
+        out[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+      }
+      return out;
+    }
+    if (Buffer.isBuffer(decoded) || decoded instanceof Uint8Array) {
+      return new Int16Array(
+        decoded.buffer,
+        decoded.byteOffset,
+        Math.floor(decoded.byteLength / 2)
+      );
+    }
+    // Fallback empty
+    return new Int16Array(0);
+  }
+
+  /**
+   * Downsample 48k → 16k by simple decimation (factor 3)
+   */
+  private downsampleTo16k(input: Int16Array): Int16Array {
+    if (input.length === 0) {
+      return input;
+    }
+    const factor = 3;
+    const outLen = Math.floor(input.length / factor);
+    const out = new Int16Array(outLen);
+    for (let i = 0, j = 0; j < outLen; i += factor, j++) {
+      out[j] = input[i];
+    }
+    return out;
   }
 
   /**
@@ -210,7 +337,7 @@ export class AudioProcessor extends EventEmitter {
         {
           participant_id: participantId,
           audio_data: audioData.toString('base64'),
-          sample_rate: this.SAMPLE_RATE,
+          sample_rate: this.OUTPUT_SAMPLE_RATE,
           channels: this.CHANNELS,
           format: 'pcm16', // hoặc 'opus' nếu không decode
         },
@@ -262,6 +389,12 @@ export class AudioProcessor extends EventEmitter {
           error: error.message,
         });
       }
+      // Emit caption error for UI fallback
+      this.emit('caption-error', {
+        participantId,
+        roomId,
+        error: error?.message || 'stt_error',
+      });
     }
   }
 
@@ -275,7 +408,7 @@ export class AudioProcessor extends EventEmitter {
         {
           room_id: roomId,
           participant_id: participantId,
-          sample_rate: this.SAMPLE_RATE,
+          sample_rate: this.OUTPUT_SAMPLE_RATE,
           channels: this.CHANNELS,
         },
         { timeout: 15000 }  // Increase timeout to 15s for cold start
@@ -299,6 +432,39 @@ export class AudioProcessor extends EventEmitter {
       }
 
       logger.info('🛑 Stopping audio streaming', { participantId });
+
+      // Close consumer/transport/decoder/socket if any
+      if (streamBuffer.consumer) {
+        try {
+          await streamBuffer.consumer.close();
+        } catch (err) {
+          logger.warn('Error closing consumer', { participantId, err });
+        }
+      }
+
+      if (streamBuffer.transport) {
+        try {
+          await streamBuffer.transport.close();
+        } catch (err) {
+          logger.warn('Error closing transport', { participantId, err });
+        }
+      }
+
+      if ((streamBuffer as any).udpSocket && typeof (streamBuffer as any).udpSocket.close === 'function') {
+        try {
+          (streamBuffer as any).udpSocket.close();
+        } catch (err) {
+          logger.warn('Error closing UDP socket', { participantId, err });
+        }
+      }
+
+      if (streamBuffer.decoder && typeof streamBuffer.decoder.destroy === 'function') {
+        try {
+          streamBuffer.decoder.destroy();
+        } catch (err) {
+          logger.warn('Error destroying decoder', { participantId, err });
+        }
+      }
 
       // Remove stream buffer
       this.activeStreams.delete(participantId);

@@ -10,6 +10,7 @@ import {
   WebRtcTransport,
   Producer,
   Consumer,
+  PlainTransport,
   RtpCapabilities,
   DtlsParameters,
   IceParameters,
@@ -86,6 +87,8 @@ export interface ServerToClientEvents {
   // STT streaming events
   'transcription': (data: TranscriptionData) => void;
   'translation': (data: TranslationData) => void;
+  'gateway-caption': (data: GatewayCaption) => void;
+  'caption-status': (data: CaptionStatus) => void;
   
   // Chat events
   'chat-message': (data: ChatMessageData) => void;
@@ -223,6 +226,7 @@ export interface TranscriptionData {
   confidence: number;
   timestamp: number;
   isFinal: boolean; // streaming: false for interim results
+  roomId?: string;
 }
 
 export interface TranslationData {
@@ -231,6 +235,23 @@ export interface TranslationData {
   translatedText: string;
   sourceLanguage: string;
   targetLanguage: string;
+  timestamp: number;
+}
+
+export interface GatewayCaption {
+  roomId: string;
+  speakerId: string;
+  seq: number;
+  text: string;
+  language?: string;
+  isFinal: boolean;
+  timestamp: number;
+}
+
+export interface CaptionStatus {
+  roomId: string;
+  status: 'asr_unavailable' | 'ok';
+  error?: string;
   timestamp: number;
 }
 
@@ -264,4 +285,8 @@ export interface AudioStreamBuffer {
   sampleRate: number;
   channels: number;
   lastProcessedAt: number;
+  transport?: PlainTransport;
+  consumer?: Consumer;
+  decoder?: any;
+  udpPort?: number;
 }

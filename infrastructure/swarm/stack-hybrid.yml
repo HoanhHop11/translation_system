@@ -146,7 +146,7 @@ services:
   # Docker Swarm có giới hạn về số lượng port mappings
   # ===========================================
   gateway:
-    image: jackboun11/jbcalling-gateway:2.0.1-vad-production  # UPDATED: Production AVR-VAD RealTimeVAD API (v1.0.9 standard)
+    image: jackboun11/jbcalling-gateway:2.0.2-asr-hub  # ASR Hub: Opus decode + RTP tap + Gateway caption events + per-room translation
     ports:
       - target: 40000
         published: 40000
@@ -291,7 +291,7 @@ services:
   # Frontend Service - MediaSoup SFU Client
   # ===========================================
   frontend:
-    image: jackboun11/jbcalling-frontend:2.0.27-utterance-mode  # Utterance-based STT for Vietnamese (RMS-VAD + offline endpoint)
+    image: jackboun11/jbcalling-frontend:2.0.28-gateway-caption  # Gateway caption ingestion: ingestGatewayCaption() + USE_GATEWAY_ASR flag
     environment:
       - REACT_APP_GATEWAY_URL=https://webrtc.jbcalling.site  # Gateway NodeJS SFU (MediaSoup)
       - REACT_APP_SIGNALING_URL=https://api.jbcalling.site  # Signaling/Socket.IO server (fallback)

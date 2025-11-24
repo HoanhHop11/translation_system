@@ -23,6 +23,9 @@ import {
   ClientToServerEvents,
   ErrorResponse,
   ParticipantData,
+  TranscriptionData,
+  CaptionStatus,
+  GatewayCaption,
 } from '../types';
 
 export class SignalingServer {
@@ -30,6 +33,7 @@ export class SignalingServer {
   private workerManager: WorkerManager;
   private roomManager: RoomManager;
   private audioProcessor: AudioProcessor;
+  private captionSeq: Map<string, Map<string, number>> = new Map();
   
   // Track socket -> participant mapping
   private socketToParticipant: Map<string, { roomId: string; participantId: string }> = new Map();
@@ -45,7 +49,8 @@ export class SignalingServer {
     this.audioProcessor = audioProcessor;
 
     // Listen for transcription events
-    this.audioProcessor.on('transcription', (data) => this.handleTranscription(data));
+    this.audioProcessor.on('transcription', (data) => this.handleGatewayCaption(data));
+    this.audioProcessor.on('caption-error', (data) => this.handleGatewayCaptionError(data));
 
     // Initialize Socket.IO với low-latency settings
     const corsOrigins = process.env.CORS_ORIGIN
@@ -476,6 +481,11 @@ export class SignalingServer {
 
       const { roomId, participantId } = mapping;
 
+      const room = this.roomManager.getRoom(roomId);
+      if (!room) {
+        throw new Error('Room not found for producer');
+      }
+
       // Create producer
       const producer = await this.roomManager.createProducer(
         roomId,
@@ -487,7 +497,7 @@ export class SignalingServer {
 
       // Start audio streaming to STT nếu là audio producer
       if (data.kind === 'audio') {
-        await this.audioProcessor.startStreaming(roomId, participantId, producer);
+        await this.audioProcessor.startStreaming(roomId, participantId, producer, room.router);
       }
 
       // Notify other participants về new producer (để họ consume)
@@ -791,24 +801,54 @@ export class SignalingServer {
   }
 
   /**
-   * Handle transcription event from AudioProcessor
+   * Handle transcription event from AudioProcessor -> emit gateway-caption (and legacy transcription)
    */
-  private async handleTranscription(data: { roomId: string; participantId: string; text: string; language?: string; isFinal: boolean }): Promise<void> {
+  async handleGatewayCaption(data: TranscriptionData): Promise<void> {
     try {
       const { roomId, participantId, text, language, isFinal } = data;
-      
-      // Broadcast transcription to room
-      this.broadcastTranscription(roomId, {
-        participantId,
-        text,
+      if (!roomId) {
+        // Fallback: try mapping by participantId
+        const mapping = Array.from(this.socketToParticipant.values()).find((m) => m.participantId === participantId);
+        if (mapping) {
+          data.roomId = mapping.roomId;
+        }
+      }
+      const effectiveRoomId = data.roomId;
+      if (!effectiveRoomId) {
+        logger.warn('No roomId for transcription, skipping caption emit', { participantId });
+        return;
+      }
+
+      // Sequence per (room, participant)
+      const seq = this.nextCaptionSeq(effectiveRoomId, participantId);
+
+      const caption: GatewayCaption = {
+        roomId: effectiveRoomId,
+        speakerId: participantId,
+        seq,
+        text: text || '',
         language,
-        isFinal,
-        timestamp: Date.now()
+        isFinal: !!isFinal,
+        timestamp: data.timestamp || Date.now(),
+      };
+      
+      // Emit new caption event
+      this.broadcastGatewayCaption(effectiveRoomId, caption);
+
+      // Emit legacy transcription for backward compatibility
+      this.broadcastTranscription(effectiveRoomId, {
+        participantId,
+        text: text || '',
+        language,
+        isFinal: !!isFinal,
+        timestamp: caption.timestamp,
+        confidence: data.confidence ?? 0,
+        roomId: effectiveRoomId,
       });
 
       // Only translate final results to save resources
       if (isFinal && text.trim().length > 0) {
-        const room = this.roomManager.getRoom(roomId);
+        const room = this.roomManager.getRoom(effectiveRoomId);
         if (!room) return;
 
         const speaker = room.participants.get(participantId);
@@ -840,7 +880,7 @@ export class SignalingServer {
             // Broadcast translation to participants who need it
             // We can broadcast to the whole room with targetLang info, 
             // and clients filter what they show.
-            this.broadcastTranslation(roomId, {
+            this.broadcastTranslation(effectiveRoomId, {
               participantId, // Original speaker
               originalText: text,
               translatedText,
@@ -856,8 +896,51 @@ export class SignalingServer {
         }
       }
     } catch (error) {
-      logger.error('Error handling transcription:', error);
+      logger.error('Error handling gateway caption:', error);
     }
+  }
+
+  /**
+   * Handle caption errors from AudioProcessor (emit status)
+   */
+  handleGatewayCaptionError(data: { participantId: string; roomId?: string; error?: string }): void {
+    const { participantId, error } = data;
+    let roomId = data.roomId;
+    if (!roomId) {
+      const mapping = Array.from(this.socketToParticipant.values()).find((m) => m.participantId === participantId);
+      roomId = mapping?.roomId;
+    }
+    if (!roomId) {
+      logger.warn('Caption error without roomId', { participantId, error });
+      return;
+    }
+
+    const status: CaptionStatus = {
+      roomId,
+      status: 'asr_unavailable',
+      error,
+      timestamp: Date.now(),
+    };
+    this.broadcastCaptionStatus(roomId, status);
+  }
+
+  private nextCaptionSeq(roomId: string, participantId: string): number {
+    if (!this.captionSeq.has(roomId)) {
+      this.captionSeq.set(roomId, new Map());
+    }
+    const roomMap = this.captionSeq.get(roomId)!;
+    const current = roomMap.get(participantId) ?? 0;
+    const next = current + 1;
+    roomMap.set(participantId, next);
+    return next;
+  }
+
+  private broadcastGatewayCaption(roomId: string, caption: GatewayCaption): void {
+    this.io.to(roomId).emit('gateway-caption', caption);
+  }
+
+  private broadcastCaptionStatus(roomId: string, status: CaptionStatus): void {
+    this.io.to(roomId).emit('caption-status', status);
   }
 
   /**

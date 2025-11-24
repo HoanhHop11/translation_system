@@ -199,7 +199,7 @@ export const WebRTCProvider = ({ children }) => {
 
     // Transcription (captions)
     socket.on('transcription', (data) => {
-      const { participantId: remotePId, type, text, language, timestamp } = data;
+      const { participantId: remotePId, type, text, language, timestamp, isFinal } = data;
 
       setTranscriptions(prev => [...prev, {
         id: `${remotePId}-${timestamp}`,
@@ -207,8 +207,28 @@ export const WebRTCProvider = ({ children }) => {
         type,
         text,
         language,
-        timestamp
+        timestamp,
+        isFinal: isFinal ?? true,
+        source: 'legacy'
       }].slice(-10)); // Keep last 10 captions
+    });
+
+    // Gateway caption (new event)
+    socket.on('gateway-caption', (data) => {
+      const { speakerId, text, language, isFinal, timestamp, seq } = data;
+      setTranscriptions(prev => [...prev, {
+        id: `${speakerId}-${timestamp || Date.now()}-${seq}`,
+        participantId: speakerId,
+        text,
+        language,
+        isFinal: !!isFinal,
+        timestamp: timestamp || Date.now(),
+        source: 'gateway'
+      }].slice(-10));
+    });
+
+    socket.on('caption-status', (data) => {
+      console.warn('Caption status event', data);
     });
 
     // Translated audio

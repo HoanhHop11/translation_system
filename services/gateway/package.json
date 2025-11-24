@@ -28,7 +28,8 @@
     "redis": "^4.7.0",
     "ioredis": "^5.4.2",
     "axios": "^1.7.9",
-    "avr-vad": "^1.0.0"
+    "avr-vad": "^1.0.0",
+    "opusscript": "^0.0.8"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",

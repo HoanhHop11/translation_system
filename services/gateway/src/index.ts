@@ -145,14 +145,10 @@ async function initialize(): Promise<void> {
 
     // Connect AudioProcessor events to SignalingServer
     audioProcessor.on('transcription', (data) => {
-      // Broadcast transcription to room
-      interface ParticipantMapping { participantId: string; roomId: string; socketId: string; }
-      const mapping = Array.from((signalingServer as any).socketToParticipant.values())
-        .find((m: any) => m.participantId === data.participantId) as ParticipantMapping | undefined;
-      
-      if (mapping) {
-        signalingServer.broadcastTranscription(mapping.roomId, data);
-      }
+      signalingServer.handleGatewayCaption(data);
+    });
+    audioProcessor.on('caption-error', (data) => {
+      signalingServer.handleGatewayCaptionError(data);
     });
 
     // Start HTTP server
