@@ -1,0 +1,11 @@
+# TTS Piper Service - Placeholder
+# TODO: Implement FastAPI server với Piper + OpenVoice v2
+
+# Dependencies:
+# - fastapi
+# - uvicorn[standard]
+# - piper-tts (hoặc tự implement với onnxruntime)
+# - openvino (cho OpenVoice v2)
+# - numpy, scipy, soundfile
+
+# See Implementation_Plan_TTS_Piper_OpenVoice_VI_EN.md for full spec

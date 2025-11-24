@@ -192,9 +192,95 @@ Port 8004 giữ nguyên → Gateway/API không cần đổi host/port, chỉ th�
   - Clone: `tts_mode="clone"` + `tts_reference_id`.
 - Frontend: thêm toggle “Giọng hệ thống” vs “Giọng giống tôi (clone)” và chọn ngôn ngữ TTS (auto theo hướng dịch, cho phép override).
 
-## 7. Verification plan
+## 7. Pre-deployment: Model Download & Preparation
 
-### 7.1 Local smoke test (VI/EN)
+### 7.1 Download Piper Models (Direct Links)
+
+**Vietnamese Model:**
+```bash
+mkdir -p /tmp/tts-models/piper
+cd /tmp/tts-models/piper
+
+# Download Vietnamese ONNX model (vais1000-medium, ~63MB)
+wget -O vi_VN-vais1000-medium.onnx \
+  "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/vi/vi_VN/vais1000/medium/vi_VN-vais1000-medium.onnx"
+
+# Download config JSON
+wget -O vi_VN-vais1000-medium.onnx.json \
+  "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/vi/vi_VN/vais1000/medium/vi_VN-vais1000-medium.onnx.json"
+```
+
+**English Model:**
+```bash
+# Download English ONNX model (lessac-medium, ~63MB)
+wget -O en_US-lessac-medium.onnx \
+  "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx"
+
+# Download config JSON
+wget -O en_US-lessac-medium.onnx.json \
+  "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json"
+```
+
+**Verify downloads:**
+```bash
+ls -lh /tmp/tts-models/piper/
+# Expected output:
+# vi_VN-vais1000-medium.onnx      (~63MB)
+# vi_VN-vais1000-medium.onnx.json (~1KB)
+# en_US-lessac-medium.onnx        (~63MB)
+# en_US-lessac-medium.onnx.json   (~1KB)
+```
+
+### 7.2 OpenVoice v2 Model Preparation
+
+**Option 1: Download Pre-converted OpenVINO IR (Recommended)**
+```bash
+mkdir -p /tmp/tts-models/openvoice/{base,tcc}
+
+# Clone OpenVoice repo for conversion scripts
+git clone https://github.com/myshell-ai/OpenVoice /tmp/OpenVoice
+cd /tmp/OpenVoice
+
+# Download checkpoints from Hugging Face
+git lfs install
+git clone https://huggingface.co/myshell-ai/OpenVoiceV2 /tmp/OpenVoiceV2
+
+# Convert to OpenVINO IR (requires openvino-dev)
+# Follow: https://github.com/openvinotoolkit/openvino_notebooks/blob/main/notebooks/284-openvoice/284-openvoice.ipynb
+python convert_to_openvino.py \
+  --checkpoint /tmp/OpenVoiceV2 \
+  --output /tmp/tts-models/openvoice/
+```
+
+**Option 2: Skip Voice Cloning for MVP**
+```bash
+# Để triển khai nhanh, có thể bỏ qua OpenVoice v2 trong phase đầu
+# Chỉ dùng Piper (mode=generic), sau đó thêm voice cloning sau
+# Comment out OpenVoice env vars trong stack-hybrid.yml
+```
+
+### 7.3 Package Models for Docker Build
+
+**Create tarball:**
+```bash
+cd /tmp/tts-models
+tar -czf tts-models.tar.gz piper/ openvoice/
+
+# Copy to services/tts-piper/
+cp tts-models.tar.gz /path/to/services/tts-piper/
+```
+
+**Update Dockerfile to extract:**
+```dockerfile
+# In services/tts-piper/Dockerfile
+COPY tts-models.tar.gz /tmp/
+RUN tar -xzf /tmp/tts-models.tar.gz -C /models/ && \
+    rm /tmp/tts-models.tar.gz
+```
+
+## 8. Verification plan
+
+### 8.1 Local smoke test (VI/EN)
 
 ```
 docker build -t jbcalling-tts-piper:test services/tts-piper
