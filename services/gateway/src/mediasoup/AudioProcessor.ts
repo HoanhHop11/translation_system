@@ -14,12 +14,14 @@ import { logger } from '../logger';
 import { AudioStreamBuffer } from '../types';
 import axios from 'axios';
 import { EventEmitter } from 'events';
+import { SileroVADProcessor } from '../utils/SileroVAD';
 
 export class AudioProcessor extends EventEmitter {
   private activeStreams: Map<string, AudioStreamBuffer> = new Map();
   private sttServiceUrl: string;
   private processingInterval: NodeJS.Timeout | null = null;
-  
+  private vadProcessor: SileroVADProcessor;
+
   // Audio buffer settings cho low-latency
   private readonly BUFFER_SIZE_MS = 100; // 100ms chunks cho real-time
   private readonly SAMPLE_RATE = 48000; // MediaSoup default
@@ -29,7 +31,12 @@ export class AudioProcessor extends EventEmitter {
 
   constructor() {
     super();
-    this.sttServiceUrl = process.env.STT_SERVICE_URL || 'http://stt:8001';
+    this.sttServiceUrl = process.env.STT_SERVICE_URL || 'http://stt:8002';
+    this.vadProcessor = new SileroVADProcessor();
+
+    // Initialize VAD
+    this.initializeVAD();
+
     logger.info('✅ AudioProcessor initialized', {
       sttServiceUrl: this.sttServiceUrl,
       bufferSizeMs: this.BUFFER_SIZE_MS,
@@ -38,6 +45,18 @@ export class AudioProcessor extends EventEmitter {
 
     // Start background processing loop
     this.startProcessingLoop();
+  }
+
+  /**
+   * Initialize VAD processor
+   */
+  private async initializeVAD(): Promise<void> {
+    try {
+      await this.vadProcessor.initialize();
+      logger.info('✅ VAD processor initialized');
+    } catch (error) {
+      logger.error('❌ Failed to initialize VAD, will process all audio:', error);
+    }
   }
 
   /**
@@ -58,6 +77,7 @@ export class AudioProcessor extends EventEmitter {
 
       // Initialize buffer cho participant này
       const streamBuffer: AudioStreamBuffer = {
+        roomId,
         participantId,
         producerId: producer.id,
         buffer: [],
@@ -74,7 +94,7 @@ export class AudioProcessor extends EventEmitter {
       // Thay vào đó, ta sử dụng RtpObserver hoặc PlainTransport
       // TODO: Implement proper RTP capture mechanism với PlainTransport hoặc custom Observer
       // Tạm thời comment out để build thành công
-      
+
       /*
       producer.observer.on('rtp', (rtpPacket: any) => {
         this.handleRtpPacket(participantId, rtpPacket);
@@ -131,7 +151,7 @@ export class AudioProcessor extends EventEmitter {
   }
 
   /**
-   * Process tất cả audio buffers
+   * Process tất cả audio buffers với VAD-based utterance detection
    */
   private async processAudioBuffers(): Promise<void> {
     for (const [participantId, streamBuffer] of this.activeStreams.entries()) {
@@ -154,8 +174,23 @@ export class AudioProcessor extends EventEmitter {
         // Tạm thời assume audio data đã là PCM (hoặc STT service handle Opus)
         const pcmData = audioData; // TODO: Implement Opus decoder
 
-        // Stream to STT service với low-latency
-        await this.streamToSTT(participantId, pcmData);
+        // ✅ VAD-based utterance detection
+        const vadResult = await this.vadProcessor.processChunk(pcmData);
+
+        if (vadResult.hasUtterance && vadResult.utteranceAudio) {
+          // ✅ Complete utterance detected - gửi đến STT
+          logger.debug('🎤 Utterance detected for participant', {
+            participantId,
+            audioSizeKB: (vadResult.utteranceAudio.length / 1024).toFixed(2),
+          });
+
+          await this.streamToSTT(participantId, vadResult.utteranceAudio, streamBuffer.roomId);
+        } else if (!vadResult.isSpeaking) {
+          // ✅ No speech detected - skip processing (giảm CPU)
+          logger.debug('🔇 No speech detected, skipping', { participantId });
+        }
+        // Else: Speech đang diễn ra, continue buffering trong VAD
+
       } catch (error) {
         logger.error('Error processing audio buffer:', { participantId, error });
       }
@@ -165,7 +200,7 @@ export class AudioProcessor extends EventEmitter {
   /**
    * Stream audio chunk đến STT service
    */
-  private async streamToSTT(participantId: string, audioData: Buffer): Promise<void> {
+  private async streamToSTT(participantId: string, audioData: Buffer, roomId: string): Promise<void> {
     try {
       const startTime = Date.now();
 
@@ -192,6 +227,7 @@ export class AudioProcessor extends EventEmitter {
       // Handle transcription result
       if (response.data && response.data.text) {
         const transcription = {
+          roomId,
           participantId,
           text: response.data.text,
           language: response.data.language || 'en',
@@ -242,7 +278,7 @@ export class AudioProcessor extends EventEmitter {
           sample_rate: this.SAMPLE_RATE,
           channels: this.CHANNELS,
         },
-        { timeout: 5000 }
+        { timeout: 15000 }  // Increase timeout to 15s for cold start
       );
 
       logger.debug('STT service notified of stream start', { participantId });

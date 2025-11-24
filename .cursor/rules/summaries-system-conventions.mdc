@@ -1,0 +1,38 @@
+Project: Hệ thống videocall dịch thuật real-time (JBCalling).
+
+Kiến trúc chính:
+- Orchestration: Docker Swarm (manager: translation01, workers: translation02, translation03).
+- Backend: Python + FastAPI, WebSocket.
+- Frontend: React/WebRTC.
+- AI services: STT (faster-whisper), Translation (NLLB-200 / Opus-MT), TTS/voice cloning (XTTS v2).
+- Infra & configs nằm trong folder: infrastructure/, services/, shared/, docs/.
+
+Quy ước chung khi làm việc trên project này:
+- Code Python:
+  - Bắt buộc dùng type hints cho public function/method.
+  - Docstring tiếng Việt, mô tả rõ Args / Returns / Raises.
+  - Ưu tiên async/await cho I/O (network, disk, model).
+  - Bố trí logging rõ ràng (logger theo module).
+
+- API:
+  - Prefix: /api/v1/.
+  - Dùng Pydantic cho schema request/response.
+  - Lỗi trả về JSON có code, message tiếng Việt dễ hiểu.
+  - WebSocket dùng cho luồng real-time (audio, subtitle, signal WebRTC).
+
+- Docker:
+  - Dùng multi-stage build, không chạy container với root user nếu không bắt buộc.
+  - Mọi service đều có healthcheck, resource limit (CPU, RAM) và logging driver chuẩn.
+  - Secrets không hard-code trong image, chỉ qua env / Docker secrets / mount.
+
+- Bảo mật:
+  - Không log secret, token, hoặc dữ liệu quá nhạy cảm.
+  - Validate input nghiêm ngặt, sanitize output nếu có render HTML.
+  - Cấu hình CORS, rate limit khi cần.
+
+Luôn giữ latency end-to-end thấp:
+- STT < 800ms, pipeline dịch cuộc gọi ~1–1.5s.
+- Ưu tiên giải pháp tối ưu CPU (model nhỏ, quantization, caching).
+---
+alwaysApply: true
+---

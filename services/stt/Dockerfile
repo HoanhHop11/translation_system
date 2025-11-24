@@ -1,41 +1,51 @@
-# Dockerfile cho STT Service sử dụng PhoWhisper-small (Vietnamese-optimized)
+# Dockerfile for STT Service using Sherpa-ONNX (CPU-only)
 FROM python:3.11-slim
 
-# Metadata
 LABEL maintainer="hopboy2003@gmail.com"
-LABEL description="STT Service using PhoWhisper-small - Vietnamese-optimized Whisper model"
-LABEL version="1.2.1"
-LABEL model="vinai/PhoWhisper-small + faster-whisper-small"
+LABEL description="STT Service using Sherpa-ONNX (Vietnamese + English streaming)"
+LABEL version="2.0.0-sherpa"
 
-# Set working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    libsndfile1 \
+# System dependencies (minimal)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
-    curl \
-    git \
+    bzip2 \
+    ca-certificates \
+    libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better layer caching
-COPY requirements.txt .
+# CPU performance env vars
+ENV OMP_NUM_THREADS=0 \
+    OMP_WAIT_POLICY=ACTIVE \
+    OMP_DYNAMIC=FALSE \
+    OMP_PROC_BIND=CLOSE \
+    MKL_NUM_THREADS=0 \
+    ORT_ENABLE_ALL=1 \
+    ORT_DISABLE_ALL_EXECUTION_PROVIDERS=0 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
-# Install Python dependencies
+# Install Python deps
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Download PhoWhisper-small model during build (Vietnamese-specialized)
-# Note: PhoWhisper uses Transformers, not faster-whisper
-# We'll keep faster-whisper for fallback/comparison
-RUN python -c "from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor; \
-    model = AutoModelForSpeechSeq2Seq.from_pretrained('vinai/PhoWhisper-small'); \
-    processor = AutoProcessor.from_pretrained('vinai/PhoWhisper-small')"
+# Download Sherpa-ONNX models (Vietnamese + English INT8 only)
+RUN mkdir -p /app/models/vi /app/models/en
 
-# Download faster-whisper SMALL for lower resource usage (multilingual)
-# Model: Systran/faster-whisper-small (lighter than medium, ~250MB)
-RUN python -c "from faster_whisper import WhisperModel; \
-    WhisperModel('small', device='cpu', compute_type='int8')"
+# Vietnamese model INT8 (74MB archive)
+RUN wget -q https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-zipformer-vi-int8-2025-04-20.tar.bz2 \
+    && tar -xf sherpa-onnx-zipformer-vi-int8-2025-04-20.tar.bz2 \
+    && mv sherpa-onnx-zipformer-vi-int8-2025-04-20/* /app/models/vi/ \
+    && rm -rf sherpa-onnx-zipformer-vi-int8-2025-04-20*
+
+# English model INT8 files only (download trực tiếp từ HuggingFace, ~10MB total thay vì 296MB)
+RUN cd /app/models/en && \
+    wget -q https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26/resolve/main/encoder-epoch-99-avg-1-chunk-16-left-64.int8.onnx && \
+    wget -q https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26/resolve/main/decoder-epoch-99-avg-1-chunk-16-left-64.int8.onnx && \
+    wget -q https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26/resolve/main/joiner-epoch-99-avg-1-chunk-16-left-64.int8.onnx && \
+    wget -q https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26/resolve/main/tokens.txt && \
+    wget -q https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26/resolve/main/bpe.model
 
 # Copy application code
 COPY . .
@@ -44,22 +54,10 @@ COPY . .
 RUN useradd -m -u 1000 stt && chown -R stt:stt /app
 USER stt
 
-# Expose port
 EXPOSE 8002
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8002/health || exit 1
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    OMP_NUM_THREADS=4 \
-    PRIMARY_MODEL=phowhisper-small \
-    FALLBACK_MODEL=faster-whisper-small \
-    COMPUTE_TYPE=int8 \
-    DEVICE=cpu
-
 # Start application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002", "--workers", "2"]
-
+CMD ["uvicorn", "sherpa_main:app", "--host", "0.0.0.0", "--port", "8002", "--workers", "2"]

@@ -2021,3 +2021,26 @@
     width: 95%;
   }
 }
+
+/* ========================================
+   Settings Panel Sections
+   ======================================== */
+
+.settings-section {
+  padding: 20px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.settings-section:last-child {
+  border-bottom: none;
+}
+
+/* Refresh button animation */
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

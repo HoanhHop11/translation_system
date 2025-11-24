@@ -1,0 +1,99 @@
+feat: Runtime Environment Variables & Local Testing Setup
+
+🔧 Runtime Env Injection:
+- Update docker-entrypoint.sh: Inject REACT_APP_* vào window._env_
+  * Tạo /usr/share/nginx/html/env-config.js at runtime
+  * Expose env vars to browser (không phải container build time)
+  * Log SIGNALING_URL và TURN_SERVER khi start
+
+- Update index.html: Load env-config.js trước main.jsx
+  * <script src="/env-config.js"></script> trong <head>
+  * Đảm bảo window._env_ available trước khi React mount
+
+- Tạo src/config/env.js: Utility để đọc env vars
+  * getEnv(key, default): Try window._env_ → import.meta.env → default
+  * ENV.SIGNALING_URL, TURN_SERVER, TURN_USERNAME, TURN_SECRET, STUN_SERVERS
+  * Helper methods: getStunServers(), getTurnConfig(), getIceServers()
+  * ENV.debug(): Log all config (với sensitive data masked)
+
+- Update WebRTCContext.jsx: Sử dụng ENV config
+  * import ENV from '../config/env'
+  * Replace process.env với ENV constants
+  * Remove duplicate getIceServers() function
+  * Simplify PC_CONFIG: iceServers: ENV.getIceServers()
+
+📦 Docker Images:
+- jackboun11/jbcalling-frontend:2.0.1-hybrid
+  * Digest: sha256:efce192b4eaada7f506018021a1fcc9ab71bc34d200ff63e5776127b0a410fbc
+  * Size: 2820 bytes manifest
+  * Bundle: 275.77 KB JS (gzip: 86.25 KB), 41.04 KB CSS (gzip: 8.28 KB)
+  * Changes: Runtime env injection + ENV utility
+
+🐳 Docker Compose Local:
+- Tạo docker-compose-hybrid-local.yml
+  * Services: signaling-hybrid (1.1.0), frontend (2.0.1-hybrid)
+  * Optional: stt, translation, tts (AI services)
+  * Network: jb-network (bridge)
+  * Ports: 8001 (signaling), 3000 (frontend)
+  * Environment variables configured for local testing
+
+📝 Documentation:
+- LOCAL-TESTING-GUIDE.md (350+ dòng)
+  * Services status checklist
+  * 8-step browser testing procedure
+  * Debugging checklist
+  * Expected console output
+  * Video demo flow
+  * Known limitations
+  * Success criteria
+  * Test results template
+  * Quick commands reference
+
+✅ Testing Status:
+- Docker services: ✅ Running
+  * jb_signaling_hybrid: port 8001
+  * jb_frontend: port 3000
+- Health checks: ✅ Passing
+  * /health endpoint: healthy
+  * /env-config.js: accessible
+- Environment injection: ✅ Verified
+  * window._env_.REACT_APP_SIGNALING_URL: http://localhost:8001
+  * window._env_.REACT_APP_TURN_SERVER: turn:34.142.190.250:3478
+  * All env vars injected correctly
+
+🧪 Ready for Browser Testing:
+URL: http://localhost:3000/room/test123
+- Open in 2 browser tabs (same room ID)
+- Expected: P2P video connection
+- Expected: Chat messaging
+- Expected: Participants & Settings panels
+- Optional: Audio translation (nếu AI services running)
+
+🎯 Benefits:
+- ✅ Same image works cho local, staging, production
+- ✅ Không cần rebuild khi đổi env vars
+- ✅ Env vars injected at container start (runtime)
+- ✅ Supports both Docker và Vite dev mode
+- ✅ Masked sensitive data in logs
+- ✅ Easy debugging với ENV.debug()
+
+⚠️ Breaking Changes:
+- Frontend image: 2.0.0-hybrid → 2.0.1-hybrid
+- Requires env-config.js load trong index.html
+- PC_CONFIG now uses ENV.getIceServers() (không còn hardcode)
+
+🔗 Related Files:
+- services/frontend/docker-entrypoint.sh (MODIFIED, +15 lines)
+- services/frontend/index.html (MODIFIED, +1 line)
+- services/frontend/src/config/env.js (NEW, 90 lines)
+- services/frontend/src/contexts/WebRTCContext.jsx (MODIFIED, -80 lines simplified)
+- docker-compose-hybrid-local.yml (NEW, 100 lines)
+- LOCAL-TESTING-GUIDE.md (NEW, 350+ lines)
+
+📊 Task Progress:
+- Task 1: Hybrid Signaling ✅ Complete
+- Task 2: Frontend Production ✅ Complete
+- Task 3: Local Testing ⏳ In Progress (services running, ready for browser test)
+- Task 4: Stack YAML Update ⏸️ Pending
+- Task 5: Production Deploy ⏸️ Pending
+- Task 6: Documentation ⏸️ Pending

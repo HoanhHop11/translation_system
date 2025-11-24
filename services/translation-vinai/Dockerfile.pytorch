@@ -1,0 +1,70 @@
+# ==============================================================================
+# VinAI Translation Service - Pure PyTorch với CPU Optimizations
+# ==============================================================================
+# Single-stage build với PyTorch CPU + INT8 dynamic quantization
+# Tránh CTranslate2 executable stack issues trên GCP
+# Expected size: ~3GB (vs 15GB NLLB, better than CT2 conversion issues)
+# ==============================================================================
+
+FROM python:3.11-slim
+
+LABEL maintainer="hopboy2003@gmail.com"
+LABEL version="1.0.0"
+LABEL description="VinAI Translation - PyTorch CPU INT8 Optimized"
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.pytorch.txt requirements.txt
+
+# Install Python dependencies (PyTorch CPU version)
+RUN pip install --no-cache-dir torch==2.1.0 --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Download VinAI models
+RUN python3 -c "from transformers import AutoTokenizer, AutoModelForSeq2SeqLM; \
+    print('Downloading vinai-translate-vi2en-v2...'); \
+    AutoTokenizer.from_pretrained('vinai/vinai-translate-vi2en-v2').save_pretrained('/app/models/vi2en'); \
+    AutoModelForSeq2SeqLM.from_pretrained('vinai/vinai-translate-vi2en-v2').save_pretrained('/app/models/vi2en'); \
+    print('Downloading vinai-translate-en2vi-v2...'); \
+    AutoTokenizer.from_pretrained('vinai/vinai-translate-en2vi-v2').save_pretrained('/app/models/en2vi'); \
+    AutoModelForSeq2SeqLM.from_pretrained('vinai/vinai-translate-en2vi-v2').save_pretrained('/app/models/en2vi'); \
+    print('Download complete!')"
+
+# Verify model sizes
+RUN echo "Model sizes:" && du -sh /app/models/*
+
+# Copy application code
+COPY main.pytorch.py main.py
+
+# Create non-root user
+RUN useradd -m -u 1000 -s /bin/bash appuser && \
+    chown -R appuser:appuser /app
+
+USER appuser
+
+# Environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    DEVICE=cpu \
+    MAX_LENGTH=512 \
+    BEAM_SIZE=1 \
+    PORT=8004
+
+# Health check
+HEALTHCHECK --interval=15s --timeout=5s --retries=3 --start-period=60s \
+    CMD curl -f http://localhost:8004/health || exit 1
+
+# Expose port
+EXPOSE 8004
+
+# Start application
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8004", "--workers", "1", "--log-level", "info"]

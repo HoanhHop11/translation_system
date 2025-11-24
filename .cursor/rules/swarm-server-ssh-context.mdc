@@ -1,0 +1,33 @@
+Hạ tầng hiện tại (tóm tắt):
+
+- translation01: Manager Node
+  - Docker Swarm manager, chạy Traefik, Gateway, Frontend, Redis, v.v.
+  - Gọi lệnh Swarm (docker service, docker stack deploy,…) phải chạy tại node này.
+
+- translation02: Worker Node (thường đang SSH)
+  - Chạy dịch vụ AI: STT, Translation, có thể một phần TTS.
+  - Có thể chạy lệnh local (build image, kiểm tra file, script, v.v.).
+
+- translation03: Worker Node
+  - Monitoring (Prometheus, Grafana, logging stack) + các service bổ trợ.
+
+Khi viết hướng dẫn lệnh cho người dùng:
+- Nếu là lệnh Swarm toàn cluster → dùng gcloud compute ssh translation01 … rồi docker service / docker stack deploy.
+- Rõ ràng phân biệt:
+  - “Chạy trên translation01 (manager)” vs “Chạy local trên translation02”.
+- Không tự ssh thêm chồng chéo; mặc định là đã SSH vào translation02.
+
+Service naming tham khảo:
+- translation_gateway
+- translation_frontend
+- translation_traefik
+- translation_redis
+- translation_prometheus
+- translation_grafana
+
+Khi sửa stack:
+- Ưu tiên chỉnh file trong infrastructure/swarm/ (ví dụ stack-hybrid.yml).
+- Sau đó mới hướng dẫn deploy lại bằng docker stack deploy.
+---
+alwaysApply: true
+---

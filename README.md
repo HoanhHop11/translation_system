@@ -1,29 +1,32 @@
 # 🌐 JB Calling - Real-time Translation Video Call System
 
-**Version**: 2.1 (Phase 4-5: Frontend + Gateway Deployment)  
-**Status**: ⚠️ **PRODUCTION - 95% Complete (Gateway Routing Issue)**  
-**Last Updated**: October 15, 2025
+**Version**: 2.2 (Phase 5: MediaSoup SFU Complete)  
+**Status**: ✅ **PRODUCTION - Phase 5 COMPLETE** 🎉  
+**Last Updated**: November 17, 2025
 
 🔗 **Live Demo**: https://jbcalling.site ✅  
-📊 **Monitoring**: https://grafana.jbcalling.site ✅  
+📊 **WebRTC Gateway**: https://webrtc.jbcalling.site ✅  
 📚 **API Docs**: https://api.jbcalling.site ✅  
-⚠️ **WebRTC Gateway**: https://webrtc.jbcalling.site (NOT working - routing issue)
+🎥 **Video Calling**: Full bidirectional video/audio working ✅
 
 ---
 
-## ⚠️ Current Status (October 15, 2025)
+## ✅ Current Status (November 17, 2025)
 
-**Phase 4-5: 95% Complete - 1 Blocking Issue**
+**Phase 5: 100% COMPLETE - MediaSoup SFU Full Bidirectional Video** 🎉
 
-✅ **14/14 Services Running** (100%)  
-✅ **Frontend v1.0.9 Deployed** (MediaSoup Client Integrated)  
-✅ **Gateway Service Running** (MediaSoup SFU, 2 workers)  
-✅ **WebRTC Firewall Configured** (UDP/TCP 40000-40100)  
-⚠️ **Traefik → Gateway Routing NOT Working** (WebSocket blocked)
+✅ **13/13 Services Running** (100%) - Deprecated P2P signaling removed  
+✅ **Frontend v1.0.43 Deployed** (Complete MediaSoup SFU Implementation)  
+✅ **Gateway v1.0.7 Running** (MediaSoup SFU with CORS fix)  
+✅ **IPv6 Dual-Stack** (Gateway 1.0.6-ipv6 deployed)  
+✅ **WebRTC Firewall Configured** (UDP/TCP 40000-40100, IPv4 + IPv6)  
+✅ **Full Bidirectional Video** (Host ↔ Join users)  
+✅ **Consume Existing Producers** (Late join sees all participants)  
+✅ **Architecture Simplified** (Removed P2P signaling, unified Gateway SFU)
 
-**Blocker**: Traefik Swarm Provider không phát hiện Gateway service  
-**Impact**: WebRTC video calling không hoạt động  
-**Solution**: Implement NGINX reverse proxy (ETA: 30-45 min)  
+**Latest**: 8 critical Gateway API compatibility fixes completed  
+**Architecture**: MediaSoup SFU with consume existing producers logic  
+**Next Phase**: Translation pipeline integration (STT → Translation → TTS)  
 **Details**: See [SYSTEM-STATUS-OCT15-2025.md](./SYSTEM-STATUS-OCT15-2025.md)
 
 ➡️ Investigation: [TRAEFIK-GATEWAY-INVESTIGATION-OCT15.md](./TRAEFIK-GATEWAY-INVESTIGATION-OCT15.md)  
@@ -533,6 +536,10 @@ Follow: [docs/02-SETUP-GUIDE.md](docs/02-SETUP-GUIDE.md)
 - [08-DEPLOYMENT.md](docs/08-DEPLOYMENT.md) - CI/CD và deployment strategies
 - [09-MONITORING.md](docs/09-MONITORING.md) - Monitoring và alerting
 - [10-TROUBLESHOOTING.md](docs/10-TROUBLESHOOTING.md) - Common issues và fixes
+
+### Network & Infrastructure
+- [11-IPV6-SETUP-GUIDE.md](docs/11-IPV6-SETUP-GUIDE.md) 🆕 - IPv6 dual-stack configuration (full guide)
+- [IPV6-QUICK-START.md](docs/IPV6-QUICK-START.md) 🆕 - IPv6 quick reference (TL;DR)
 
 ### Planning Documents
 - [11-ROADMAP.md](docs/11-ROADMAP.md) - Kế hoạch phát triển chi tiết

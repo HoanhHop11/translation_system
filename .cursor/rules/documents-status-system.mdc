@@ -1,0 +1,25 @@
+Quy ước tài liệu của project:
+
+1. Luôn đọc tài liệu trước khi code:
+   - DOCUMENTATION-INDEX.md: bản đồ tài liệu – đọc đầu tiên.
+   - SYSTEM-STATUS-OCTxx-2025.md: trạng thái hệ thống mới nhất.
+   - ROADMAP-UPDATED-OCT2025.md: phase hiện tại, ưu tiên công việc.
+   - Các file docs/0x-*.md theo chủ đề (kiến trúc, setup, WebRTC, monitoring,…).
+
+2. Khi cập nhật tài liệu:
+   - Nếu chỉ thay đổi nhỏ → cập nhật trực tiếp file hiện có.
+   - Nếu thay đổi lớn → tạo file SYSTEM-STATUS-OCTDD-2025.md mới, thêm notice “superseded” vào file cũ, cập nhật DOCUMENTATION-INDEX.md.
+   - ROADMAP-UPDATED-OCT2025.md luôn là bản roadmap “sống” – update tiến độ tại đây.
+
+3. Sau mỗi session làm việc lớn:
+   - Tạo/ cập nhật WRAP-UP-OCTDD.md: tóm tắt việc đã làm, trạng thái hiện tại, next steps.
+   - Ghi rõ những gì còn dở dang/blocked để session sau tiếp tục.
+
+4. Đặt tên commit bằng tiếng Việt, ngắn gọn:
+   - feat: Thêm …
+   - fix: Sửa lỗi …
+   - docs: Cập nhật tài liệu …
+   - refactor:, test:, chore: …
+---
+alwaysApply: true
+---

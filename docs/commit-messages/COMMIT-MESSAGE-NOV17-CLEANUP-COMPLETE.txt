@@ -1,0 +1,199 @@
+docs: Cleanup complete - Architecture simplified và file structure organized
+
+## SUMMARY
+Hoàn tất cleanup toàn diện sau Phase 5:
+- Tổ chức lại ~90 documentation files
+- Remove deprecated signaling service
+- Simplify architecture từ 14→13 services
+- Tiết kiệm ~1.5GB RAM
+
+## THAY ĐỔI
+
+### 1. File structure reorganization
+Root level:
+- Before: 50+ markdown files (clutter)
+- After: 3 essential files (clean)
+  * README.md
+  * ROADMAP-UPDATED-OCT2025.md
+  * DOCUMENTATION-INDEX.md
+
+Created new structure:
+- docs/wrap-ups/ - Session reports
+- docs/reports/phase*/ - Phase-specific reports
+- docs/commit-messages/ - Git commit messages
+- demos/html/ - HTML demo files
+
+Moved ~90 files to proper locations.
+
+### 2. Architecture cleanup
+Removed from stack-hybrid.yml:
+- signaling service (P2P Socket.IO)
+  * 3 replicas @ 512MB each
+  * Unused since Frontend 1.0.34
+  * Replaced by Gateway SFU
+
+Service count: 14 → 13
+
+### 3. Documentation updates
+Created:
+- docs/README.md - Documentation overview
+- docs/wrap-ups/README.md - Wrap-up guide
+- docs/reports/DEPRECATED-SERVICES-NOV17.md - Deprecation docs
+- CLEANUP-SUMMARY-NOV17.txt - This cleanup summary
+- docs/commit-messages/COMMIT-MESSAGE-NOV17-*.txt - Commit messages
+
+Updated:
+- DOCUMENTATION-INDEX.md - Complete restructure
+- README.md - Service count 14→13
+- ROADMAP-UPDATED-OCT2025.md - Phase 5 100% complete
+- infrastructure/swarm/stack-hybrid.yml - Removed signaling
+
+Backup:
+- infrastructure/swarm/stack-hybrid-with-signaling.yml.backup
+
+## REASONS
+
+### Why file reorganization?
+- Root directory had 50+ markdown files
+- Hard to navigate and find documents
+- No clear structure for phase reports
+- Needed scalable organization for future phases
+
+### Why remove signaling service?
+- Architecture mismatch: P2P signaling vs SFU architecture
+- Resource waste: 1.5GB RAM unused
+- Maintenance burden: Duplicate Socket.IO logic
+- Technical debt: Not used since Frontend 1.0.34 (Nov 10)
+- Gateway SFU proven stable for weeks
+
+## BENEFITS
+
+### File structure:
+✅ Clean root directory (3 files only)
+✅ Easy navigation by phase/topic
+✅ Scalable for future phases
+✅ Professional project organization
+✅ Quick access to current status
+
+### Architecture:
+✅ Simpler architecture (single video service)
+✅ ~1.5GB RAM freed for AI models
+✅ Easier maintenance (no duplicate logic)
+✅ Clearer service responsibilities
+✅ Ready for Phase 6 integration
+
+### Documentation:
+✅ Comprehensive deprecation guide
+✅ Rollback procedures documented
+✅ Architecture comparison (P2P vs SFU)
+✅ Resource savings tracked
+✅ Migration paths clear
+
+## TESTING
+
+### Before deployment:
+- [x] Backup created: stack-hybrid-with-signaling.yml.backup
+- [x] Documentation complete
+- [x] File structure verified (ls -1 *.md → 3 files)
+- [x] Service count verified (grep services → 13 services)
+
+### After deployment (Optional):
+- [ ] docker service ls → 13 services
+- [ ] docker service ls | grep signaling → empty
+- [ ] curl https://webrtc.jbcalling.site/health → 200 OK
+- [ ] Test video call at https://jbcalling.site
+- [ ] Monitor resource usage (~1.5GB reduction)
+- [ ] Gateway logs clean (no errors)
+
+### Rollback (if needed):
+```bash
+cd infrastructure/swarm
+scp stack-hybrid-with-signaling.yml.backup translation01:/tmp/
+ssh translation01 "docker stack deploy -c /tmp/stack-hybrid-with-signaling.yml.backup translation"
+```
+
+## IMPACT
+
+### Production:
+- LOW RISK: Service not in use since Nov 10
+- NO DOWNTIME: Stack update is graceful
+- RESOURCE SAVINGS: ~1.5GB RAM freed
+- ARCHITECTURE: Simplified, easier to maintain
+
+### Development:
+- EASIER NAVIGATION: Documents well organized
+- CLEAR STRUCTURE: Phase reports separated
+- HISTORICAL CONTEXT: All commits documented
+- SCALABLE: Ready for Phase 6 and beyond
+
+### Documentation:
+- COMPREHENSIVE: 83+ docs organized
+- NAVIGABLE: DOCUMENTATION-INDEX.md updated
+- SEARCHABLE: Structured by topic/phase
+- MAINTAINABLE: Clear naming conventions
+
+## FILES AFFECTED
+
+Modified:
+- infrastructure/swarm/stack-hybrid.yml (removed signaling)
+- DOCUMENTATION-INDEX.md (complete restructure)
+- README.md (service count, architecture note)
+- ROADMAP-UPDATED-OCT2025.md (Phase 5 complete)
+
+Created:
+- docs/README.md
+- docs/wrap-ups/README.md
+- docs/reports/DEPRECATED-SERVICES-NOV17.md
+- docs/commit-messages/COMMIT-MESSAGE-NOV17-*.txt
+- CLEANUP-SUMMARY-NOV17.txt
+- infrastructure/swarm/stack-hybrid-with-signaling.yml.backup
+
+Moved:
+- WRAP-UP-*.md → docs/wrap-ups/
+- COMMIT*.txt → docs/commit-messages/
+- PHASE*-*.md → docs/reports/phase*/
+- HOTFIX-*.md, *-FIX-*.md → docs/reports/hotfixes/
+- *-INVESTIGATION-*.md → docs/reports/investigations/
+- demo-*.html, test-*.html → demos/html/
+
+## NEXT STEPS
+
+1. **Optional deployment** (low risk):
+   ```bash
+   cd infrastructure/swarm
+   scp stack-hybrid.yml translation01:/tmp/
+   ssh translation01 "docker stack deploy -c /tmp/stack-hybrid.yml translation"
+   ```
+
+2. **Verify cleanup**:
+   - Service count: 13
+   - Gateway health: OK
+   - Video calling: Working
+   - Resource usage: ~1.5GB lower
+
+3. **Monitor for 24h**:
+   - Gateway logs clean
+   - No service errors
+   - Resource usage stable
+   - Video calls working
+
+4. **Phase 6 preparation**:
+   - Architecture clean and simple
+   - No service conflicts
+   - Resources freed for AI models
+   - Documentation ready
+
+## RELATED
+
+- Deprecation guide: docs/reports/DEPRECATED-SERVICES-NOV17.md
+- Phase 5 wrap-up: docs/wrap-ups/WRAP-UP-NOV17-MEDIASOUP-SFU-COMPLETE.md
+- Service removal: docs/commit-messages/COMMIT-MESSAGE-NOV17-DEPRECATE-SIGNALING.txt
+- Cleanup summary: CLEANUP-SUMMARY-NOV17.txt
+- Navigation: DOCUMENTATION-INDEX.md
+
+---
+Type: docs, refactor, perf
+Scope: infrastructure, documentation
+Breaking: No
+Date: November 17, 2025
+Phase: 5 Complete → Phase 6 Ready

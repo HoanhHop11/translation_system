@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Layout Mockup - JB Calling</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #202124;
+      color: #e8eaed;
+      overflow: hidden;
+    }
+
+    /* Main Container */
+    .room {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    .header {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 64px;
+      background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      z-index: 100;
+    }
+
+    .room-info {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .room-code {
+      background: rgba(255, 255, 255, 0.12);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .connection-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      background: rgba(15, 157, 88, 0.2);
+      color: #0f9d58;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    /* Video Content Area */
+    .video-content {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 80px 24px 120px;
+      transition: padding-right 0.3s ease;
+    }
+
+    .video-content.with-panel {
+      padding-right: calc(24px + 360px);
+    }
+
+    /* Video Grid */
+    .video-grid {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(300px, 1fr));
+      grid-template-rows: repeat(2, 1fr);
+      gap: 16px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .video-tile {
+      position: relative;
+      background: #3c4043;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      transition: box-shadow 0.2s ease;
+    }
+
+    .video-tile.local {
+      border: 2px solid #1a73e8;
+    }
+
+    .video-tile.speaking {
+      box-shadow: 0 0 0 3px #1a73e8;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 3px #1a73e8; }
+      50% { box-shadow: 0 0 0 6px rgba(26, 115, 232, 0.4); }
+    }
+
+    .video-placeholder {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .avatar {
+      font-size: 48px;
+      font-weight: 600;
+      color: white;
+    }
+
+    .video-overlay {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 12px;
+      background: linear-gradient(0deg, rgba(0,0,0,0.7) 0%, transparent 100%);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .participant-name {
+      font-size: 14px;
+      font-weight: 500;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Controls Bar */
+    .controls {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%);
+      padding: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      z-index: 100;
+    }
+
+    .control-btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: rgba(60, 64, 67, 0.95);
+      border: none;
+      color: #e8eaed;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-size: 20px;
+    }
+
+    .control-btn:hover {
+      background: rgba(80, 84, 87, 0.95);
+      transform: scale(1.08);
+    }
+
+    .control-btn.active {
+      background: #1a73e8;
+    }
+
+    .control-btn.danger {
+      background: #d93025;
+    }
+
+    .control-btn.danger:hover {
+      background: #c5221f;
+    }
+
+    /* Unified Side Panel */
+    .side-panel {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 360px;
+      background: #202124;
+      box-shadow: -2px 0 8px rgba(0, 0, 0, 0.3);
+      transform: translateX(100%);
+      transition: transform 0.3s ease;
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .side-panel.open {
+      transform: translateX(0);
+    }
+
+    /* Panel Tabs */
+    .panel-tabs {
+      display: flex;
+      background: #2d2d30;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .panel-tab {
+      flex: 1;
+      padding: 16px 8px;
+      background: transparent;
+      border: none;
+      color: #9aa0a6;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border-bottom: 2px solid transparent;
+      text-align: center;
+    }
+
+    .panel-tab:hover {
+      color: #e8eaed;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .panel-tab.active {
+      color: #8ab4f8;
+      border-bottom-color: #1a73e8;
+    }
+
+    /* Panel Content */
+    .panel-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .panel-title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .close-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: transparent;
+      border: none;
+      color: #e8eaed;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .close-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    /* Chat Content */
+    .chat-messages {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .message {
+      background: rgba(255, 255, 255, 0.08);
+      padding: 12px;
+      border-radius: 8px;
+    }
+
+    .message-sender {
+      font-weight: 600;
+      font-size: 13px;
+      color: #8ab4f8;
+      margin-bottom: 4px;
+    }
+
+    .message-text {
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .message-time {
+      font-size: 11px;
+      color: #9aa0a6;
+      margin-top: 4px;
+    }
+
+    /* Settings Content */
+    .setting-group {
+      margin-bottom: 20px;
+    }
+
+    .setting-label {
+      font-size: 13px;
+      color: #9aa0a6;
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .setting-select {
+      width: 100%;
+      background: rgba(60, 64, 67, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      color: #e8eaed;
+      padding: 10px 12px;
+      font-size: 14px;
+    }
+
+    /* Participants */
+    .participant-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .participant-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+    }
+
+    .participant-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 16px;
+    }
+
+    .participant-info {
+      flex: 1;
+    }
+
+    .participant-name-text {
+      font-weight: 500;
+      font-size: 14px;
+    }
+
+    .participant-status {
+      font-size: 12px;
+      color: #9aa0a6;
+    }
+
+    /* Banner */
+    .mockup-banner {
+      position: fixed;
+      top: 72px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1a73e8;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      z-index: 300;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+  </style>
+</head>
+<body>
+  <!-- Mockup Banner -->
+  <div class="mockup-banner">
+    📱 Mockup - Smart Layout Preview | Click tabs để xem các panel
+  </div>
+
+  <!-- Main Room Container -->
+  <div class="room">
+    <!-- Header -->
+    <div class="header">
+      <div class="room-info">
+        <div class="room-code">abc-defg-hij</div>
+        <div class="connection-badge">
+          <span class="status-dot"></span>
+          <span>Kết nối tốt</span>
+        </div>
+      </div>
+      <div class="room-info">
+        <span style="font-size: 13px">10:30</span>
+      </div>
+    </div>
+
+    <!-- Video Content -->
+    <div class="video-content" id="videoContent">
+      <div class="video-grid">
+        <!-- Local User -->
+        <div class="video-tile local speaking">
+          <div class="video-placeholder">
+            <div class="avatar">J</div>
+          </div>
+          <div class="video-overlay">
+            <span class="participant-name">JackBoun11 (Bạn)</span>
+          </div>
+        </div>
+
+        <!-- Remote Users -->
+        <div class="video-tile">
+          <div class="video-placeholder" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%)">
+            <div class="avatar">P</div>
+          </div>
+          <div class="video-overlay">
+            <span class="participant-name">Participant 1</span>
+          </div>
+        </div>
+
+        <div class="video-tile">
+          <div class="video-placeholder" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)">
+            <div class="avatar">P</div>
+          </div>
+          <div class="video-overlay">
+            <span class="participant-name">Participant 2</span>
+          </div>
+        </div>
+
+        <div class="video-tile">
+          <div class="video-placeholder" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)">
+            <div class="avatar">P</div>
+          </div>
+          <div class="video-overlay">
+            <span class="participant-name">Participant 3</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls Bar -->
+    <div class="controls">
+      <button class="control-btn" title="Microphone">🎤</button>
+      <button class="control-btn" title="Camera">📹</button>
+      <button class="control-btn" title="Screen Share">🖥️</button>
+      <button class="control-btn" id="panelToggle" title="Toggle Panel">💬</button>
+      <button class="control-btn danger" title="Leave Call">📞</button>
+    </div>
+
+    <!-- Unified Side Panel -->
+    <div class="side-panel" id="sidePanel">
+      <!-- Tabs -->
+      <div class="panel-tabs">
+        <button class="panel-tab active" data-tab="chat">💬 Chat</button>
+        <button class="panel-tab" data-tab="people">👥 People</button>
+        <button class="panel-tab" data-tab="settings">⚙️ Settings</button>
+        <button class="panel-tab" data-tab="translation">🌐 Dịch</button>
+      </div>
+
+      <!-- Panel Content -->
+      <div class="panel-content">
+        <div class="panel-header">
+          <h3 class="panel-title" id="panelTitle">Chat</h3>
+          <button class="close-btn" id="closePanel">✕</button>
+        </div>
+
+        <!-- Chat Tab Content -->
+        <div id="chatContent" class="tab-content">
+          <div class="chat-messages">
+            <div class="message">
+              <div class="message-sender">JackBoun11</div>
+              <div class="message-text">Xin chào mọi người!</div>
+              <div class="message-time">10:15</div>
+            </div>
+            <div class="message">
+              <div class="message-sender">Participant 1</div>
+              <div class="message-text">Hi! Test layout mới nhé</div>
+              <div class="message-time">10:16</div>
+            </div>
+            <div class="message">
+              <div class="message-sender">Participant 2</div>
+              <div class="message-text">Layout này đẹp đấy!</div>
+              <div class="message-time">10:17</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- People Tab Content -->
+        <div id="peopleContent" class="tab-content" style="display: none;">
+          <div class="participant-list">
+            <div class="participant-item">
+              <div class="participant-avatar">J</div>
+              <div class="participant-info">
+                <div class="participant-name-text">JackBoun11 (Bạn)</div>
+                <div class="participant-status">🎤 Đang nói</div>
+              </div>
+            </div>
+            <div class="participant-item">
+              <div class="participant-avatar" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%)">P</div>
+              <div class="participant-info">
+                <div class="participant-name-text">Participant 1</div>
+                <div class="participant-status">🔇 Tắt tiếng</div>
+              </div>
+            </div>
+            <div class="participant-item">
+              <div class="participant-avatar" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)">P</div>
+              <div class="participant-info">
+                <div class="participant-name-text">Participant 2</div>
+                <div class="participant-status">✅ Đang nghe</div>
+              </div>
+            </div>
+            <div class="participant-item">
+              <div class="participant-avatar" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)">P</div>
+              <div class="participant-info">
+                <div class="participant-name-text">Participant 3</div>
+                <div class="participant-status">✅ Đang nghe</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Settings Tab Content -->
+        <div id="settingsContent" class="tab-content" style="display: none;">
+          <div class="setting-group">
+            <label class="setting-label">Ngôn ngữ của bạn</label>
+            <select class="setting-select">
+              <option>🇻🇳 Tiếng Việt</option>
+              <option>🇬🇧 English</option>
+              <option>🇨🇳 中文</option>
+            </select>
+          </div>
+          <div class="setting-group">
+            <label class="setting-label">Ngôn ngữ muốn dịch sang</label>
+            <select class="setting-select">
+              <option>🇬🇧 English</option>
+              <option>🇻🇳 Tiếng Việt</option>
+              <option>🇨🇳 中文</option>
+            </select>
+          </div>
+          <div class="setting-group">
+            <label class="setting-label">Chất lượng video</label>
+            <select class="setting-select">
+              <option>HD (720p)</option>
+              <option>SD (480p)</option>
+              <option>Tiết kiệm (360p)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Translation Tab Content -->
+        <div id="translationContent" class="tab-content" style="display: none;">
+          <div class="setting-group">
+            <label class="setting-label">Chế độ dịch</label>
+            <select class="setting-select">
+              <option>🔊 Live Translation (TTS)</option>
+              <option>📝 Live Caption (Text only)</option>
+              <option>🚫 Tắt</option>
+            </select>
+          </div>
+          <div class="setting-group">
+            <label class="setting-label">Hiển thị phụ đề</label>
+            <select class="setting-select">
+              <option>🌐 Song ngữ (gốc + dịch)</option>
+              <option>🗣️ Chỉ ngôn ngữ gốc</option>
+              <option>🎯 Chỉ ngôn ngữ đã dịch</option>
+              <option>🚫 Tắt phụ đề</option>
+            </select>
+          </div>
+          <div style="background: rgba(26, 115, 232, 0.15); padding: 12px; border-radius: 8px; font-size: 13px; color: #8ab4f8;">
+            ℹ️ Translation đang hoạt động. Độ trễ trung bình: 1.2s
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Panel Toggle Logic
+    const panelToggle = document.getElementById('panelToggle');
+    const sidePanel = document.getElementById('sidePanel');
+    const closePanel = document.getElementById('closePanel');
+    const videoContent = document.getElementById('videoContent');
+    const panelTabs = document.querySelectorAll('.panel-tab');
+    const panelTitle = document.getElementById('panelTitle');
+
+    let isPanelOpen = false;
+
+    function togglePanel() {
+      isPanelOpen = !isPanelOpen;
+      if (isPanelOpen) {
+        sidePanel.classList.add('open');
+        videoContent.classList.add('with-panel');
+        panelToggle.classList.add('active');
+      } else {
+        sidePanel.classList.remove('open');
+        videoContent.classList.remove('with-panel');
+        panelToggle.classList.remove('active');
+      }
+    }
+
+    panelToggle.addEventListener('click', togglePanel);
+    closePanel.addEventListener('click', togglePanel);
+
+    // Tab Switching Logic
+    const tabContents = {
+      'chat': document.getElementById('chatContent'),
+      'people': document.getElementById('peopleContent'),
+      'settings': document.getElementById('settingsContent'),
+      'translation': document.getElementById('translationContent')
+    };
+
+    const tabTitles = {
+      'chat': 'Chat',
+      'people': 'Người tham gia',
+      'settings': 'Cài đặt',
+      'translation': 'Dịch thuật'
+    };
+
+    panelTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const tabName = tab.dataset.tab;
+        
+        // Update active tab
+        panelTabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        // Update panel title
+        panelTitle.textContent = tabTitles[tabName];
+        
+        // Show corresponding content
+        Object.values(tabContents).forEach(content => content.style.display = 'none');
+        tabContents[tabName].style.display = 'block';
+        
+        // Open panel if not already open
+        if (!isPanelOpen) {
+          togglePanel();
+        }
+      });
+    });
+  </script>
+</body>
+</html>

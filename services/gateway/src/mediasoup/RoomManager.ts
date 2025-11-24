@@ -114,7 +114,9 @@ export class RoomManager {
     roomId: string,
     participantId: string,
     socketId: string,
-    name: string
+    name: string,
+    sourceLanguage?: string,
+    targetLanguage?: string
   ): Promise<Participant> {
     const room = this.getRoom(roomId);
     if (!room) {
@@ -130,6 +132,8 @@ export class RoomManager {
       socketId,
       name,
       joinedAt: Date.now(),
+      sourceLanguage,
+      targetLanguage,
       producers: new Map(),
       consumers: new Map(),
       isAudioStreaming: false,
@@ -143,12 +147,16 @@ export class RoomManager {
       roomId,
       participantId,
       name,
+      sourceLanguage,
+      targetLanguage,
       timestamp: Date.now(),
     });
 
     logger.info('Participant joined streaming room', {
       roomId,
       participantId,
+      sourceLanguage,
+      targetLanguage,
       participantCount: room.participants.size,
     });
 
@@ -385,7 +393,17 @@ export class RoomManager {
     }
 
     // Kiểm tra xem router có thể consume không
-    if (!room.router.canConsume({ producerId, rtpCapabilities })) {
+    const canConsume = room.router.canConsume({ producerId, rtpCapabilities });
+    
+    if (!canConsume) {
+      // Debug logging
+      logger.error('❌ canConsume failed:', {
+        producerId,
+        roomId,
+        participantId,
+        clientRtpCapabilities: JSON.stringify(rtpCapabilities, null, 2),
+        routerRtpCapabilities: JSON.stringify(room.router.rtpCapabilities, null, 2)
+      });
       throw new Error('Cannot consume producer with given RTP capabilities');
     }
 
@@ -473,9 +491,14 @@ export class RoomManager {
     }
 
     try {
-      await this.redisPub.publish('gateway:events', JSON.stringify(event));
+      // Add 1s timeout để tránh block createRoom
+      await Promise.race([
+        this.redisPub.publish('gateway:events', JSON.stringify(event)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Redis publish timeout')), 1000))
+      ]);
     } catch (error) {
       logger.error('Error publishing Redis event:', error);
+      // Graceful degradation - không throw, room vẫn tạo được
     }
   }
 

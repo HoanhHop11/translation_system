@@ -1,22 +1,17 @@
-# STT Service Requirements (Updated for PhoWhisper)
-# Core dependencies
+# STT Service Requirements (Sherpa-ONNX migration)
+# Core web stack
 fastapi==0.115.5
 uvicorn[standard]==0.32.1
 python-multipart==0.0.20
 
-# PhoWhisper (Transformers-based) + faster-whisper (fallback)
-transformers==4.47.1
-torch==2.5.1
-accelerate==1.2.1
-faster-whisper==1.1.0
-ctranslate2>=4.0,<5
+# Sherpa-ONNX + ONNX Runtime (CPU-only)
+sherpa-onnx==1.12.17
+onnxruntime==1.23.2
 
 # Audio processing
-av>=11
 numpy<2.0.0
-librosa==0.10.2
 soundfile==0.12.1
-scipy==1.11.3  # For audio resampling in PhoWhisper
+scipy==1.11.3
 
 # Utilities
 pydantic==2.10.3

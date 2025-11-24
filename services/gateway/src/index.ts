@@ -38,9 +38,13 @@ async function initialize(): Promise<void> {
     // Initialize Express
     const app = express();
 
-    // Middleware
+    // Middleware - Parse CORS origins
+    const corsOrigins = process.env.CORS_ORIGIN 
+      ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
+      : '*';
+    
     app.use(cors({
-      origin: process.env.CORS_ORIGIN || '*',
+      origin: corsOrigins,
       credentials: true,
     }));
     app.use(express.json());

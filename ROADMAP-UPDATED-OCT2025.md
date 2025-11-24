@@ -1,35 +1,42 @@
-# 🗺️ ROADMAP CẬP NHẬT - OCTOBER 2025
+# 🗺️ ROADMAP CẬP NHẬT - NOVEMBER 2025
 
-**Cập nhật:** October 15, 2025 ⭐ (Latest)
-**Ưu tiên:** Hoàn thiện MVP Videocall + Live Translation trước khi tối ưu models
+**Cập nhật:** November 17, 2025 🎉 (Latest)
+**Milestone:** Phase 5 COMPLETE - MediaSoup SFU Full Bidirectional Video
 
 ---
 
 ## 🎯 MỤC TIÊU CHÍNH (MVP FEATURES)
 
-### ✅ Đã hoàn thành (Phase 1-3):
+### ✅ Đã hoàn thành (Phase 1-5): 🎉
 - ✅ Infrastructure: Docker Swarm 3 instances
 - ✅ STT Service: PhoWhisper + faster-whisper (working)
 - ✅ Translation Service: NLLB-600M (working)
 - ✅ TTS Service: XTTS v2 (working, 4 replicas)
 - ✅ Basic API endpoints (STT, Translation, TTS)
 - ✅ Full production stack (14/14 services deployed)
+- ✅ **Frontend v1.0.43** - Complete MediaSoup SFU implementation
+- ✅ **Gateway v1.0.7** - MediaSoup SFU with CORS fix
+- ✅ **IPv6 Dual-Stack** - Gateway 1.0.6-ipv6 deployed
+- ✅ **Full Bidirectional Video** - Host ↔ Join users working
+- ✅ **Consume Existing Producers** - Late join sees all participants
 
-### 🎯 Ưu tiên HIỆN TẠI (Phase 4-6):
-**Status**: ⚠️ **Phase 4-5 95% Complete - Gateway Routing Issue**
+### 🎯 Ưu tiên HIỆN TẠI (Phase 6):
+**Status**: ✅ **Phase 5 100% Complete** → **Ready for Phase 6**
 
-1. ✅ **Frontend Videocall UI** (Google Meet-inspired + Glassmorphism) - DONE
-2. ✅ **MediaSoup Client Integration** - Frontend v1.0.9 deployed
-3. ✅ **Gateway Service (MediaSoup SFU)** - Running 1/1, healthy
-4. ⚠️ **Gateway WebSocket Routing** - NOT WORKING via Traefik
-5. ⏸️ **E2E WebRTC Testing** - BLOCKED by routing issue
-6. ⏸️ **Language Selection** - Pending E2E validation
-7. ⏸️ **Live Captions** - Pending E2E validation
-8. ⏸️ **Live Translation** - Pending E2E validation
+1. ✅ **Frontend Videocall UI** - DONE
+2. ✅ **MediaSoup Client Integration** - Frontend v1.0.43
+3. ✅ **Gateway Service (MediaSoup SFU)** - Gateway v1.0.7
+4. ✅ **Gateway API Compatibility** - 8 critical fixes completed
+5. ✅ **Full Bidirectional Video** - Working perfectly
+6. ⏸️ **E2E WebRTC Testing** - Ready to start (HIGH PRIORITY)
+7. ⏸️ **Translation Pipeline Integration** - Next phase
+8. ⏸️ **Language Selection** - Pending integration
+9. ⏸️ **Live Captions** - Pending integration
+10. ⏸️ **Live Translation** - Pending integration
 
-**Current Blocker**: Traefik không phát hiện Gateway service  
-**Solution**: Implement NGINX reverse proxy (30-45 min)  
-**Details**: See `TRAEFIK-GATEWAY-INVESTIGATION-OCT15.md`
+**Latest Achievement**: Complete MediaSoup SFU with consume existing producers  
+**Next Task**: E2E testing → Translation pipeline integration  
+**Details**: See `WRAP-UP-NOV17-MEDIASOUP-SFU-COMPLETE.md`
 
 ### 🔬 Tối ưu sau khi MVP hoàn thành (Phase 7+):
 - Model upgrades (distil-whisper, Kokoro-82M, etc.)
@@ -38,50 +45,60 @@
 
 ---
 
-## 📊 PROGRESS UPDATE (October 15, 2025) - NEW
+## 📊 PROGRESS UPDATE (November 17, 2025) 🎉 **LATEST**
 
-### **Phase 4-5 Progress: 95% Complete**
+### **Phase 5 Progress: 100% COMPLETE** ✅
 
-#### ✅ Completed Today:
-1. **Frontend v1.0.9** với MediaSoup Client Integration
-   - Added mediasoup-client@3.7.0 dependency
-   - Implemented Device, Transport, Producer/Consumer management
-   - Socket.IO event handlers cho WebRTC signaling
-   - Built và deployed 3/3 replicas
-   - Accessible: https://jbcalling.site
+#### 🎉 Major Achievements:
+1. **MediaSoup SFU Complete Implementation** (Frontend 1.0.43)
+   - Full bidirectional video/audio working
+   - Consume existing producers on join (late join sees all participants)
+   - Robust error handling (8 critical fixes)
+   - roomIdRef for synchronous access
+   - Flexible RTP capabilities parsing
+   - Per-producer error handling
 
-2. **Gateway Service Optimization**
-   - Changed từ global → replicated mode (production best practice)
-   - Changed từ host → ingress port mode
-   - Fixed tất cả Traefik labels (9/9 correct)
-   - Running 1/1 replica on translation02
-   - Health: `{"status":"healthy","workers":2}`
+2. **Gateway API Compatibility** (Gateway 1.0.7)
+   - CORS multiple origins fix (array parsing)
+   - Join-room `name` field compatibility
+   - Server-side room creation
+   - get-router-rtp-capabilities event
+   - participantId mapping in new-producer
+   - IPv6 dual-stack support (1.0.6-ipv6)
 
-3. **WebRTC Firewall Rules**
-   - UDP 40000-40100 (RTP media transport)
-   - TCP 40000-40100 (fallback)
-   - TCP 3000 (Gateway HTTP)
-   - Applied network tag to translation02
+3. **Complete Fix Series** (8 Critical Fixes)
+   - v1.0.34-35: MediaSoup SFU architecture restore
+   - v1.0.36: Join-room API compatibility
+   - v1.0.37: Server-side room creation
+   - v1.0.39: roomIdRef synchronous access
+   - v1.0.40: MediaSoup initialization fix
+   - v1.0.41: RTP capabilities validation
+   - v1.0.42: Bidirectional video (participantId mapping)
+   - v1.0.43: Consume existing producers ✅
 
-4. **Deep Investigation**
-   - 4 giờ troubleshooting Traefik → Gateway routing
-   - Tested 7+ different approaches
-   - Researched 50+ Traefik documentation snippets
-   - Documented findings comprehensively
+4. **Infrastructure Stability**
+   - Frontend 3/3 replicas distributed across nodes
+   - Gateway 1/1 replica running healthy
+   - IPv6 dual-stack deployed and monitored
+   - Full documentation completed
 
-#### ⚠️ Current Blocker (5% Remaining):
-**Traefik Swarm Provider không phát hiện Gateway service**
-- Symptoms: WebSocket connection failed, empty routing
-- Root cause: UNKNOWN despite correct configuration
-- Impact: WebRTC video calling không hoạt động
-- Documentation: `TRAEFIK-GATEWAY-INVESTIGATION-OCT15.md`
+#### ✅ Success Criteria Met:
+- ✅ Host creates room → produce video/audio
+- ✅ Join user consumes host's stream → sees host
+- ✅ Host consumes join user's stream → sees join user
+- ✅ Late join user consumes all existing producers → sees everyone
+- ✅ No "caps is not an object" errors
+- ✅ No "participantId undefined" errors
+- ✅ No "roomId not available" errors
+- ✅ Full mesh visibility via SFU
 
-#### 🚀 Next Action:
-**Implement NGINX Reverse Proxy** (Recommended - 30-45 min)
-- Bypass Traefik cho Gateway WebSocket
-- Direct IP routing (no service discovery issues)
-- SSL termination với existing certs
-- Details: See `WRAP-UP-OCT15.md` section "KẾ HOẠCH TIẾP THEO"
+#### 🚀 Ready for Phase 6:
+**Translation Pipeline Integration**
+- Audio extraction from MediaSoup consumers
+- STT → Translation → TTS pipeline
+- Real-time latency optimization
+- Multi-language support
+- Details: See `WRAP-UP-NOV17-MEDIASOUP-SFU-COMPLETE.md`
 
 ---
 

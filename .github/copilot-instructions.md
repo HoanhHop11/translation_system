@@ -64,29 +64,49 @@ Dự án: **Hệ thống Videocall Dịch Thuật Real-time Đa Ngôn Ngữ**
 - **Latest Status**: `SYSTEM-STATUS-OCT15-2025.md`
 
 ### Cấu hình Hạ tầng
-**Instance 1: translation01**
-- Loại: c4d-standard-4 (4 vCPUs, 30 GB RAM) ⚠️ Updated from c2d-highcpu-8
-- Disk: 100GB Balanced persistent disk
-- External IP: 34.143.235.114
-- Internal IP: 10.148.0.5
-- Vai trò: Manager Node + Core Services
-- Không có GPU
 
-**Instance 2: translation02**
+#### SSH Connection Status
+⚠️ **QUAN TRỌNG**: Hiện tại đang SSH vào **translation02** (Worker Node)
+- **Node hiện tại**: translation02 (34.142.190.250)
+- **Manager Node**: translation01 (34.143.235.114)
+- **KHÔNG cần SSH lại** khi thực hiện các tác vụ trên translation02
+- Khi cần thực hiện lệnh Docker Swarm (deploy, service management), cần SSH sang **translation01** (Manager Node)
+
+#### Chi tiết Instances
+
+**Instance 1: translation01** (Manager Node)
+- Loại: c4d-standard-4 (4 vCPUs, 30 GB RAM)
+- Disk: 100GB Balanced persistent disk
+- Zone: asia-southeast1-a
+- External IP: 34.143.235.114
+- Internal IP: 10.200.0.2 ⚠️ **Updated Nov 18, 2025** (was 10.148.0.5)
+- Network: VPC 10.200.0.0/24
+- Vai trò: **Manager Node** + Core Services (Traefik, Gateway, Frontend)
+- Không có GPU
+- **Docker Swarm**: Manager node (Re-init với 10.200.0.2:2377)
+
+**Instance 2: translation02** (Worker Node - ⚠️ Đang kết nối)
 - Loại: c2d-highcpu-8 (8 vCPUs, 16 GB RAM)  
 - Disk: 100GB SSD persistent disk
-- External IP: 35.247.177.106
-- Internal IP: 10.148.0.3
+- Zone: asia-southeast1-b
+- External IP: 34.142.190.250
+- Internal IP: 10.200.0.3 ⚠️ **Updated Nov 18, 2025** (was 10.148.0.3)
+- Network: VPC 10.200.0.0/24
 - Firewall: HTTP, HTTPS, Health check, WebRTC (UDP/TCP 40000-40100)
-- Vai trò: Worker Node + WebRTC Gateway + AI Services
+- Vai trò: Worker Node + AI Services (STT, Translation)
+- **Docker Swarm**: Worker node (Active, Ready)
+- **⚠️ SSH Status**: ĐANG KẾT NỐI - Không cần SSH lại
 
-**Instance 3: translation03**
+**Instance 3: translation03** (Worker Node)
 - Loại: c2d-highcpu-4 (4 vCPUs, 8 GB RAM)
 - Disk: 50GB SSD persistent disk
-- External IP: 34.124.197.132
-- Internal IP: 10.148.0.4
+- Zone: asia-southeast1-b ⚠️ **Different zone from translation01/02**
+- External IP: 34.126.138.3
+- Internal IP: 10.200.0.4 ⚠️ **Updated Nov 18, 2025** (was 10.148.0.4)
+- Network: VPC 10.200.0.0/24
 - Firewall: HTTP, HTTPS, Health check
-- Vai trò: Worker Node + Monitoring
+- Vai trò: Worker Node + Monitoring (Prometheus, Grafana, TTS)
+- **Docker Swarm**: Worker node (Active, Ready)
 
 ## Kiến trúc Hệ thống
 
@@ -317,6 +337,47 @@ async def transcribe_audio(
 - Troubleshooting guides
 
 ## Quy trình Làm việc với Agent
+
+### SSH & Environment Context
+⚠️ **QUAN TRỌNG - Trạng thái SSH hiện tại**:
+- **Đang kết nối SSH vào**: translation02 (35.247.177.106)
+- **KHÔNG cần SSH lại** khi làm việc trên translation02
+- **Manager Node**: translation01 (34.143.235.114) - cần SSH riêng cho Docker Swarm commands
+- **Kiểm tra trước khi SSH**: Luôn xác nhận node hiện tại trước khi thực hiện lệnh SSH
+- **Docker Swarm commands**: Phải chạy trên translation01 (Manager Node)
+- **Local commands**: Có thể chạy trực tiếp trên translation02
+
+#### SSH Command Templates
+⚠️ **translation01 đã có IPv6** - Sử dụng gcloud compute ssh thay vì ssh trực tiếp:
+
+**Template chuẩn cho Docker service commands:**
+```bash
+# Kiểm tra service status
+gcloud compute ssh translation01 --zone=asia-southeast1-a --command="docker service ps <SERVICE_NAME> --filter 'desired-state=running' --format 'table {{.Name}}\t{{.Image}}\t{{.CurrentState}}'"
+
+# Xem logs với timestamps
+gcloud compute ssh translation01 --zone=asia-southeast1-a --command="docker service logs <SERVICE_NAME> --tail 10 --timestamps"
+
+# Combined: Status + Logs
+gcloud compute ssh translation01 --zone=asia-southeast1-a --command="docker service ps <SERVICE_NAME> --filter 'desired-state=running' --format 'table {{.Name}}\t{{.Image}}\t{{.CurrentState}}' && echo '---' && docker service logs <SERVICE_NAME> --tail 10 --timestamps"
+
+# List all services
+gcloud compute ssh translation01 --zone=asia-southeast1-a --command="docker service ls"
+
+# Deploy stack
+gcloud compute ssh translation01 --zone=asia-southeast1-a --command="docker stack deploy -c /tmp/stack-hybrid.yml translation"
+
+# Service inspect
+gcloud compute ssh translation01 --zone=asia-southeast1-a --command="docker service inspect <SERVICE_NAME> --pretty"
+```
+
+**Common service names:**
+- `translation_gateway` - WebRTC Gateway (MediaSoup)
+- `translation_frontend` - React Frontend
+- `translation_traefik` - Reverse Proxy
+- `translation_redis` - Cache & Message Queue
+- `translation_prometheus` - Metrics
+- `translation_grafana` - Monitoring Dashboard
 
 ### Khi Nhận Yêu cầu Mới:
 1. ✅ Đọc kỹ yêu cầu và xác định scope

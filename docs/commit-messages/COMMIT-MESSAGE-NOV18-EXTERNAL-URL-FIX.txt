@@ -1,0 +1,45 @@
+fix(frontend): Đợi socket connected trước khi join room cho external URL
+
+## Vấn đề:
+- Khi truy cập trực tiếp URL external integration (từ website bên ngoài)
+- RoomMeet component gọi joinRoom() TRƯỚC KHI socket.io connected
+- Gây lỗi: "Error: Socket not connected"
+- Kết quả: Màn hình stuck ở "Đang khởi động camera..."
+
+## Root Cause:
+- useEffect(() => { joinRoom() }, [roomId]) chạy ngay khi component mount
+- Socket.IO connection mất 1-2 giây để establish
+- Không có check isConnected trước khi gọi joinRoom()
+
+## Solution:
+1. Thêm dependency `isConnected` vào useEffect
+2. Return early nếu socket chưa connected
+3. useEffect sẽ re-run khi isConnected thay đổi từ false → true
+4. Đảm bảo joinRoom() chỉ chạy SAU KHI socket đã connected
+
+## Files Changed:
+- services/frontend/src/pages/RoomMeet.jsx
+  - Line 142: Thêm check `if (!isConnected) return`
+  - Line 197: Thêm `isConnected` vào dependency array
+
+## Testing:
+Flow tạo room từ Home (KHÔNG bị ảnh hưởng):
+1. Home → Create Room → createRoom() được gọi
+2. Navigate /room/{id} → socket đã connected rồi
+3. joinRoom() chạy bình thường ✅
+
+Flow external URL (ĐÃ FIXED):
+1. Direct URL → Component mount → Socket connecting...
+2. useEffect check: socket chưa connected → return early
+3. Socket connected → isConnected = true → useEffect re-run
+4. joinRoom() chạy với socket đã connected ✅
+
+## Impact:
+- ✅ External integration URLs hoạt động đúng
+- ✅ Không breaking changes cho flow tạo room từ Home
+- ✅ User experience tốt hơn (không còi stuck loading)
+
+## Related:
+- Gateway đã được move về translation01 để cùng node với Traefik
+- ANNOUNCED_IP đã được revert về 34.143.235.114 (translation01)
+- WebSocket routing giữa Traefik và Gateway hoạt động ổn định

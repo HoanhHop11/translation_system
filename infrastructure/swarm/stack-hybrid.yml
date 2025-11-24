@@ -1,0 +1,742 @@
+# Docker Swarm Stack - Production Architecture
+# Phase 5 Complete: Gateway SFU + MediaSoup (Unified)
+# Updated: November 17, 2025
+# Architecture: Gateway (NodeJS + MediaSoup SFU) + Coturn + AI Services
+
+version: "3.9"
+
+# Shared configuration templates
+x-default-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "50m"
+    max-file: "3"
+    labels: "service,stack"
+
+x-default-update-config: &default-update-config
+  parallelism: 1
+  delay: 10s
+  failure_action: rollback
+  monitor: 60s
+  order: start-first
+
+x-default-rollback-config: &default-rollback-config
+  parallelism: 1
+  delay: 10s
+
+x-default-restart-policy: &default-restart-policy
+  condition: on-failure
+  delay: 5s
+  max_attempts: 3
+  window: 120s
+
+networks:
+  frontend:
+    driver: overlay
+    driver_opts:
+      encrypted: "true"
+      com.docker.network.driver.mtu: "1410"
+    attachable: true
+  backend:
+    driver: overlay
+    driver_opts:
+      encrypted: "true"
+      com.docker.network.driver.mtu: "1410"
+    attachable: true
+
+volumes:
+  models_cache:
+    driver: local
+  redis_data:
+    driver: local
+  redis_gateway_data:
+    driver: local
+  grafana_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  loki_data:
+    driver: local
+  traefik_certs:
+    driver: local
+
+services:
+  # ===========================================
+  # DEPRECATED SERVICES REMOVED (Nov 17, 2025)
+  # ===========================================
+  # - signaling (P2P Socket.IO) → Replaced by Gateway SFU
+  # - mediasoup (Separate workers) → Unified into Gateway
+  #
+  # Current Architecture:
+  # - Gateway: NodeJS + Socket.IO + MediaSoup SFU (All-in-one)
+  # - Frontend: Connects directly to Gateway (webrtc.jbcalling.site)
+  # - No separate P2P signaling server needed
+  #
+  # Reason for removal:
+  # - Phase 5 complete with Gateway SFU working perfectly
+  # - Full bidirectional video with consume existing producers
+  # - Simpler architecture, easier maintenance
+  # - No RTP capabilities mismatch issues
+  #
+  # Rollback: Use stack-hybrid-with-signaling.yml.backup if needed
+  # ===========================================
+
+  # ===========================================
+  # Coturn TURN Server (NAT Traversal)
+  # ===========================================
+  coturn:
+    image: jackboun11/jbcalling-coturn:1.0.0
+    networks:
+      - backend
+    ports:
+      - target: 3478
+        published: 3478
+        protocol: tcp
+        mode: host
+      - target: 3478
+        published: 3478
+        protocol: udp
+        mode: host
+      - target: 5349
+        published: 5349
+        protocol: tcp
+        mode: host
+      - target: 49152
+        published: 49152
+        protocol: udp
+        mode: host
+      - target: 49153
+        published: 49153
+        protocol: udp
+        mode: host
+      - target: 49154
+        published: 49154
+        protocol: udp
+        mode: host
+      - target: 49155
+        published: 49155
+        protocol: udp
+        mode: host
+      - target: 49156
+        published: 49156
+        protocol: udp
+        mode: host
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.instance == translation02  # Same node as MediaSoup
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    logging: *default-logging
+
+  # ===========================================
+  # Gateway Service - NodeJS Socket.IO + Room Management
+  # ⚠️ WORKAROUND: Giảm xuống còn 20 ports thay vì 100
+  # Docker Swarm có giới hạn về số lượng port mappings
+  # ===========================================
+  gateway:
+    image: jackboun11/jbcalling-gateway:2.0.1-vad-production  # UPDATED: Production AVR-VAD RealTimeVAD API (v1.0.9 standard)
+    ports:
+      - target: 40000
+        published: 40000
+        protocol: udp
+        mode: host
+      - target: 40001
+        published: 40001
+        protocol: udp
+        mode: host
+      - target: 40002
+        published: 40002
+        protocol: udp
+        mode: host
+      - target: 40003
+        published: 40003
+        protocol: udp
+        mode: host
+      - target: 40004
+        published: 40004
+        protocol: udp
+        mode: host
+      - target: 40005
+        published: 40005
+        protocol: udp
+        mode: host
+      - target: 40006
+        published: 40006
+        protocol: udp
+        mode: host
+      - target: 40007
+        published: 40007
+        protocol: udp
+        mode: host
+      - target: 40008
+        published: 40008
+        protocol: udp
+        mode: host
+      - target: 40009
+        published: 40009
+        protocol: udp
+        mode: host
+      - target: 40010
+        published: 40010
+        protocol: udp
+        mode: host
+      - target: 40011
+        published: 40011
+        protocol: udp
+        mode: host
+      - target: 40012
+        published: 40012
+        protocol: udp
+        mode: host
+      - target: 40013
+        published: 40013
+        protocol: udp
+        mode: host
+      - target: 40014
+        published: 40014
+        protocol: udp
+        mode: host
+      - target: 40015
+        published: 40015
+        protocol: udp
+        mode: host
+      - target: 40016
+        published: 40016
+        protocol: udp
+        mode: host
+      - target: 40017
+        published: 40017
+        protocol: udp
+        mode: host
+      - target: 40018
+        published: 40018
+        protocol: udp
+        mode: host
+      - target: 40019
+        published: 40019
+        protocol: udp
+        mode: host
+    networks:
+      - frontend  # Traefik discovery
+      - backend   # Redis + STT/Translation services access
+    environment:
+      - PORT=3000
+      - HOST=0.0.0.0
+      - ANNOUNCED_IP=34.143.235.114
+      - "ANNOUNCED_IPV6=2600:1900:4080:7c::"
+      - ENABLE_IPV6=true
+      - NODE_ENV=production
+      - CORS_ORIGIN=https://www.jbcalling.site,https://jbcalling.site
+      - WORKER_COUNT=2  # MediaSoup workers inside Gateway
+      - RTC_MIN_PORT=40000  # ⚠️ CRITICAL: Reduced to 20 ports for Docker Swarm compatibility
+      - RTC_MAX_PORT=40019  # Only 20 ports published với mode: host
+      - LOG_LEVEL=debug
+      - REDIS_HOST=redis_gateway
+      - REDIS_PORT=6379
+      - STT_SERVICE_URL=http://stt:8002  # ✅ Now accessible via backend network
+      - TRANSLATION_SERVICE_URL=http://translation:8005  # VinAI Translation Service
+      - TTS_SERVICE_URL=http://tts_translation02:8003
+      - ENABLE_AUDIO_PROCESSING=true
+      - AUDIO_SAMPLE_RATE=48000
+      - AUDIO_CHANNELS=1
+    depends_on:
+      - redis
+    deploy:
+      mode: replicated
+      replicas: 1
+      # endpoint_mode: vip (default) - works with port publishing
+      placement:
+        constraints:
+          - node.labels.instance == translation01  # REVERT: Gateway must be on same node as Traefik for WebSocket routing
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.75'
+          memory: 1G
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=translation_frontend"
+        - "traefik.http.routers.gateway.rule=Host(`webrtc.jbcalling.site`)"
+        - "traefik.http.routers.gateway.entrypoints=websecure"
+        - "traefik.http.routers.gateway.tls=true"
+        - "traefik.http.routers.gateway.tls.certresolver=letsencrypt"
+        - "traefik.http.services.gateway.loadbalancer.server.port=3000"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+
+  # ===========================================
+  # Frontend Service - MediaSoup SFU Client
+  # ===========================================
+  frontend:
+    image: jackboun11/jbcalling-frontend:2.0.27-utterance-mode  # Utterance-based STT for Vietnamese (RMS-VAD + offline endpoint)
+    environment:
+      - REACT_APP_GATEWAY_URL=https://webrtc.jbcalling.site  # Gateway NodeJS SFU (MediaSoup)
+      - REACT_APP_SIGNALING_URL=https://api.jbcalling.site  # Signaling/Socket.IO server (fallback)
+      - REACT_APP_TURN_SERVER=turn:media.jbcalling.site:3478
+      - REACT_APP_TURN_USERNAME=videocall
+      - REACT_APP_TURN_SECRET=4798697923fa54e05ca5a509412bfd03144837b726a2e348149c2fe5e1b9c4dd
+      - REACT_APP_STUN_SERVERS=stun:stun.l.google.com:19302,stun:stun.cloudflare.com:3478
+      - NODE_ENV=production
+      # AI Translation Pipeline Services (Public URLs qua Traefik)
+      - REACT_APP_STT_SERVICE_URL=https://stt.jbcalling.site
+      - REACT_APP_TRANSLATION_SERVICE_URL=https://translation.jbcalling.site
+      - REACT_APP_TTS_SERVICE_URL=https://tts.jbcalling.site
+    networks:
+      - frontend
+    deploy:
+      # Config từ stack-optimized.yml - ĐÃ PROVEN HOẠT ĐỘNG
+      update_config:
+        parallelism: 1
+        delay: 5s              # Static files start nhanh
+        failure_action: rollback
+        monitor: 45s           # Đủ time để healthcheck pass
+        max_failure_ratio: 0
+        order: stop-first      # CRITICAL: stop-first tránh Swarm kill new task
+      rollback_config:
+        parallelism: 1
+        delay: 0s
+        failure_action: pause
+        monitor: 10s
+        order: stop-first
+      restart_policy:
+        condition: on-failure  # Chỉ restart on-failure
+        delay: 3s
+        max_attempts: 5
+        window: 60s
+      mode: replicated
+      replicas: 3
+      placement:
+        constraints:
+          - node.labels.instance == translation01  # PHẢI cùng node với Traefik
+      # Overlay network cross-node routing FAILED - must co-locate với Traefik
+      resources:
+        limits:
+          cpus: '0.2'    # Từ stack-optimized
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=translation_frontend"
+        - "traefik.http.routers.frontend.rule=Host(`jbcalling.site`) || Host(`www.jbcalling.site`)"
+        - "traefik.http.routers.frontend.entrypoints=websecure"
+        - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.frontend.tls.domains[0].main=jbcalling.site"
+        - "traefik.http.routers.frontend.tls.domains[0].sans=www.jbcalling.site"
+        - "traefik.http.services.frontend.loadbalancer.server.port=80"
+    stop_grace_period: 30s  # Nginx graceful shutdown
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s      # Container có time khởi động
+    logging: *default-logging
+
+  # ===========================================
+  # Redis Services
+  # ===========================================
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    networks:
+      - backend
+    volumes:
+      - redis_data:/data
+    deploy:
+      update_config: *default-update-config
+      rollback_config: *default-rollback-config
+      restart_policy: *default-restart-policy
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 768M
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging: *default-logging
+
+  redis_gateway:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    networks:
+      - backend
+    volumes:
+      - redis_gateway_data:/data
+    deploy:
+      update_config: *default-update-config
+      rollback_config: *default-rollback-config
+      restart_policy: *default-restart-policy
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.instance == translation02
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 384M
+        reservations:
+          cpus: '0.1'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging: *default-logging
+
+  # ===========================================
+  # AI Services (No changes)
+  # ===========================================
+  stt:
+    image: jackboun11/jbcalling-stt:2.0.4-utterance-endpoint  # Utterance endpoint for offline VI + streaming EN + debug logging
+    networks:
+      - backend
+      - frontend
+    environment:
+      - REDIS_HOST=redis_gateway
+      - REDIS_PORT=6379
+      - REDIS_TTL=3600
+      - CORS_ORIGINS=https://jbcalling.site,https://www.jbcalling.site
+    depends_on:
+      - redis
+    deploy:
+      update_config: *default-update-config
+      rollback_config: *default-rollback-config
+      restart_policy: *default-restart-policy
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.instance == translation02
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 3G        # Tăng từ 1.5G → 3G để tránh OOM kill
+        reservations:
+          cpus: '1.0'
+          memory: 2G        # Tăng từ 1G → 2G
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=translation_frontend"
+        - "traefik.http.routers.stt.rule=Host(`stt.jbcalling.site`)"
+        - "traefik.http.routers.stt.entrypoints=websecure"
+        - "traefik.http.routers.stt.tls.certresolver=letsencrypt"
+        - "traefik.http.services.stt.loadbalancer.server.port=8002"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8002/health\")' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging: *default-logging
+
+  translation:
+    image: jackboun11/jbcalling-translation-vinai:1.0.3
+    networks:
+      - backend
+      - frontend
+    environment:
+      - REDIS_HOST=redis_gateway
+      - REDIS_PORT=6379
+      - REDIS_DB=1
+      - CACHE_TTL=86400
+      - DEVICE=cpu
+      - COMPUTE_TYPE=int8
+      - MAX_LENGTH=512
+      - BEAM_SIZE=1
+    depends_on:
+      - redis
+    deploy:
+      update_config: *default-update-config
+      rollback_config: *default-rollback-config
+      restart_policy: *default-restart-policy
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.instance == translation02  # Co-locate với STT, optimized CPU node
+      resources:
+        limits:
+          cpus: '1.5'    # Giảm từ 2.0 (NLLB) xuống 1.5 (VinAI efficient hơn)
+          memory: 2G     # Giảm từ 5G xuống 2G - VinAI chỉ cần ~1GB
+        reservations:
+          cpus: '0.75'   # Giảm từ 1.0 xuống 0.75
+          memory: 1G     # Giảm từ 3G xuống 1G
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=translation_frontend"
+        - "traefik.http.routers.translation.rule=Host(`translation.jbcalling.site`)"
+        - "traefik.http.routers.translation.entrypoints=websecure"
+        - "traefik.http.routers.translation.tls.certresolver=letsencrypt"
+        - "traefik.http.services.translation.loadbalancer.server.port=8005"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8005/health\")' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging: *default-logging
+
+  tts_translation02:
+    image: jackboun11/jbcalling-tts:redis-cache
+    networks:
+      - backend
+      - frontend
+    environment:
+      - REDIS_HOST=redis_gateway
+      - REDIS_PORT=6379
+      - REDIS_TTL=3600
+      - TTS_MODEL=tts_models/multilingual/multi-dataset/xtts_v2
+      - TORCH_NUM_THREADS=2
+    volumes:
+      - models_cache:/root/.cache/TTS
+    depends_on:
+      - redis
+    deploy:
+      update_config: *default-update-config
+      rollback_config: *default-rollback-config
+      restart_policy: *default-restart-policy
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.instance == translation02
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1.5G
+        reservations:
+          cpus: '0.5'
+          memory: 768M
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=translation_frontend"
+        - "traefik.http.routers.tts.rule=Host(`tts.jbcalling.site`)"
+        - "traefik.http.routers.tts.entrypoints=websecure"
+        - "traefik.http.routers.tts.tls.certresolver=letsencrypt"
+        - "traefik.http.services.tts.loadbalancer.server.port=8004"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8004/health\")' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging: *default-logging
+
+  tts_translation03:
+    image: jackboun11/jbcalling-tts:redis-cache
+    networks:
+      - backend
+      - frontend
+    environment:
+      - REDIS_HOST=redis_gateway
+      - REDIS_PORT=6379
+      - REDIS_TTL=3600
+      - TTS_MODEL=tts_models/multilingual/multi-dataset/xtts_v2
+      - TORCH_NUM_THREADS=1
+    volumes:
+      - models_cache:/root/.cache/TTS
+    depends_on:
+      - redis
+    deploy:
+      update_config: *default-update-config
+      rollback_config: *default-rollback-config
+      restart_policy: *default-restart-policy
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.instance == translation03
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8004/health\")' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging: *default-logging
+
+  # ===========================================
+  # Infrastructure Services
+  # ===========================================
+  traefik:
+    image: traefik:v2.10
+    command:
+      - "--api.dashboard=true"
+      - "--providers.docker.swarmMode=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=translation_frontend"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.email=hopboy2003@gmail.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--log.level=INFO"
+      - "--accesslog=true"
+      - "--metrics.prometheus=true"
+    ports:
+      - target: 80
+        published: 80
+        protocol: tcp
+        mode: host
+      - target: 443
+        published: 443
+        protocol: tcp
+        mode: host
+    networks:
+      - frontend
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_certs:/letsencrypt
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.api.rule=Host(`traefik.jbcalling.site`)"
+        - "traefik.http.routers.api.service=api@internal"
+        - "traefik.http.routers.api.entrypoints=websecure"
+        - "traefik.http.routers.api.tls.certresolver=letsencrypt"
+        - "traefik.http.services.traefik.loadbalancer.server.port=8080"
+    logging: *default-logging
+
+  # Monitoring stack (unchanged)
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+    networks:
+      - backend
+    volumes:
+      - prometheus_data:/prometheus
+      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    logging: *default-logging
+
+  grafana:
+    image: grafana/grafana:latest
+    networks:
+      - backend
+      - frontend
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=redis-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.grafana.rule=Host(`grafana.jbcalling.site`)"
+        - "traefik.http.routers.grafana.entrypoints=websecure"
+        - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+        - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+    logging: *default-logging
+
+  loki:
+    image: grafana/loki:latest
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - backend
+    volumes:
+      - loki_data:/loki
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging: *default-logging
+
+  # ===========================================
+  # Portainer & Agent - REMOVED to save resources
+  # Previously: 256M + 128M per node (3 nodes = ~640M total)
+  # ===========================================

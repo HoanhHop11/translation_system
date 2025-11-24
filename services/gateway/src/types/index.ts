@@ -35,6 +35,10 @@ export interface Participant {
   name: string;
   joinedAt: number;
   
+  // Language preferences
+  sourceLanguage?: string;
+  targetLanguage?: string;
+  
   // WebRTC transports cho bidirectional streaming
   sendTransport?: WebRtcTransport;
   recvTransport?: WebRtcTransport;
@@ -82,6 +86,13 @@ export interface ServerToClientEvents {
   // STT streaming events
   'transcription': (data: TranscriptionData) => void;
   'translation': (data: TranslationData) => void;
+  
+  // Chat events
+  'chat-message': (data: ChatMessageData) => void;
+  
+  // Screen share events
+  'screen-share-started': (data: { participantId: string; roomId: string }) => void;
+  'screen-share-stopped': (data: { participantId: string; roomId: string }) => void;
 }
 
 export interface ClientToServerEvents {
@@ -115,6 +126,13 @@ export interface ClientToServerEvents {
   'resume-consumer': (data: { consumerId: string }, callback: () => void) => void;
   'pause-consumer': (data: { consumerId: string }, callback: () => void) => void;
   'close-producer': (data: { producerId: string }, callback: () => void) => void;
+  
+  // Chat events
+  'chat-message': (data: { sender: string; text: string; timestamp?: number }) => void;
+  
+  // Screen share events
+  'screen-share-started': (data: { roomId: string }) => void;
+  'screen-share-stopped': (data: { roomId: string }) => void;
 }
 
 /**
@@ -217,6 +235,16 @@ export interface TranslationData {
 }
 
 /**
+ * Chat message data
+ */
+export interface ChatMessageData {
+  sender: string;
+  text: string;
+  timestamp: number;
+  roomId: string;
+}
+
+/**
  * Worker pool management
  */
 export interface WorkerData {
@@ -229,6 +257,7 @@ export interface WorkerData {
  * Audio streaming buffer cho STT
  */
 export interface AudioStreamBuffer {
+  roomId: string;
   participantId: string;
   producerId: string;
   buffer: Buffer[];

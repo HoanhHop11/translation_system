@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useWebRTC } from '../contexts/WebRTCContext'
 import { 
   Video, 
   Languages, 
@@ -12,25 +13,35 @@ import {
 
 export default function Home() {
   const navigate = useNavigate()
+  const { createRoom } = useWebRTC()
   const [username, setUsername] = useState('')
   const [roomCode, setRoomCode] = useState('')
   const [isJoining, setIsJoining] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
 
-  const handleCreateRoom = (e) => {
+  const handleCreateRoom = async (e) => {
     e.preventDefault()
     if (!username.trim()) {
       alert('Vui lòng nhập tên của bạn')
       return
     }
 
-    // Tạo room code ngẫu nhiên (6 ký tự)
-    const newRoomCode = Math.random().toString(36).substring(2, 8).toUpperCase()
-    
-    // Lưu username vào localStorage
-    localStorage.setItem('jb_username', username.trim())
-    
-    // Navigate đến room
-    navigate(`/room/${newRoomCode}`)
+    try {
+      setIsCreating(true)
+      
+      // Lưu username vào localStorage
+      localStorage.setItem('jb_username', username.trim())
+      
+      // Gọi Gateway API để tạo room thật
+      const newRoomId = await createRoom()
+      
+      // Navigate đến room với roomId từ Gateway
+      navigate(`/room/${newRoomId}`)
+    } catch (error) {
+      console.error('❌ Error creating room:', error)
+      alert('Không thể tạo phòng. Vui lòng thử lại.')
+      setIsCreating(false)
+    }
   }
 
   const handleJoinRoom = (e) => {
@@ -47,8 +58,8 @@ export default function Home() {
     // Lưu username vào localStorage
     localStorage.setItem('jb_username', username.trim())
     
-    // Navigate đến room
-    navigate(`/room/${roomCode.trim().toUpperCase()}`)
+    // Navigate đến room (giữ nguyên case của room ID)
+    navigate(`/room/${roomCode.trim()}`)
   }
 
   return (
@@ -77,14 +88,15 @@ export default function Home() {
               />
             </div>
 
-            <button type="submit" className="btn-primary">
-              Tạo Phòng & Nhận Mã
+            <button type="submit" className="btn-primary" disabled={isCreating}>
+              {isCreating ? 'Đang tạo phòng...' : 'Tạo Phòng & Nhận Mã'}
             </button>
 
             <button 
               type="button"
               onClick={() => setIsJoining(true)}
               className="btn-link"
+              disabled={isCreating}
             >
               Đã có mã phòng? Tham gia ngay
             </button>
@@ -113,11 +125,10 @@ export default function Home() {
                 type="text"
                 id="roomCode"
                 value={roomCode}
-                onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                placeholder="VD: ABC123"
+                onChange={(e) => setRoomCode(e.target.value)}
+                placeholder="room_1234567890_abc12xyz"
                 required
-                maxLength="6"
-                style={{ textTransform: 'uppercase' }}
+                maxLength="50"
               />
             </div>
 

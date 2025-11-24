@@ -1,0 +1,73 @@
+feat: IPv6 dual-stack support cho WebRTC Gateway
+
+## 🌐 Tính năng mới
+- Thêm IPv6 support cho Gateway service (dual-stack IPv4+IPv6)
+- Config code đã sẵn sàng: chỉ cần set ANNOUNCED_IPV6 và ENABLE_IPV6=true
+- Port range: 40000-40100 (khớp với stack hiện tại)
+
+## 📝 Documentation
+- docs/11-IPV6-SETUP-GUIDE.md: Hướng dẫn chi tiết IPv6 setup
+  * GCP infrastructure configuration
+  * Hostinger DNS AAAA records
+  * Firewall rules với network tags
+  * Testing & troubleshooting
+  
+- docs/IPV6-QUICK-START.md: Quick reference TL;DR
+  * Copy-paste commands
+  * Verification checklist
+  * Common issues
+
+## 🔧 Scripts
+- scripts/setup-ipv6-gcp.sh: Automated GCP setup
+  * Enable IPv6 cho subnet
+  * Add IPv6 cho translation01
+  * Check/add network tags
+  * Create firewall rules
+  * Output IPv6 address cho config
+
+- scripts/test-ipv6.sh: IPv6 connectivity testing
+  * ICMPv6 ping test
+  * TCP/UDP port tests
+  * DNS AAAA verification
+  * Gateway service status check
+
+## 🎯 Code Changes
+### services/gateway/src/config.ts
+- Cập nhật webRtcTransport.listenInfos với conditional IPv6
+- Support env vars: ANNOUNCED_IPV6, ENABLE_IPV6
+- Giữ nguyên IPv4 config (backward compatible)
+
+### infrastructure/swarm/stack-hybrid.yml
+- Thêm commented placeholders cho IPv6 env vars
+- Comment hướng dẫn enable IPv6 sau khi setup infrastructure
+- Port range đã đúng: 40000-40100
+
+### DOCUMENTATION-INDEX.md & README.md
+- Thêm IPv6 guides vào index
+- Update README với IPv6 documentation links
+
+## ✅ Điểm quan trọng đã fix
+1. **Port range**: Dùng 40000-40100 (khớp stack hiện tại, không phải 40010-40019)
+2. **Network tags**: Script check/add tag "translation-webrtc" cho VM
+3. **DNS provider**: Hướng dẫn cụ thể cho Hostinger (không phải Cloudflare/Cloud DNS)
+4. **Code sẵn sàng**: Gateway config đã support IPv6, chỉ cần enable qua env vars
+
+## 🚀 Deployment Steps
+1. Run: `./scripts/setup-ipv6-gcp.sh` (automated GCP setup)
+2. Add AAAA record trên Hostinger DNS
+3. Uncomment 2 dòng trong stack-hybrid.yml:
+   - ANNOUNCED_IPV6=<your_ipv6>
+   - ENABLE_IPV6=true
+4. Deploy: `docker stack deploy -c stack-hybrid.yml translation`
+5. Verify: `./scripts/test-ipv6.sh <your_ipv6>`
+
+## 📊 Impact
+- **Performance**: Tương đương hoặc tốt hơn (ít NAT hops)
+- **Compatibility**: Future-proof cho IPv6-only clients
+- **Risk**: Low (dual-stack, có thể rollback dễ dàng)
+- **Breaking changes**: None (backward compatible)
+
+## 🔗 Related
+- Refs: MediaSoup dual-stack docs, GCP IPv6 configuration
+- Dependencies: Requires GCP subnet with stackType=IPV4_IPV6
+- Testing: Manual E2E testing required after deployment

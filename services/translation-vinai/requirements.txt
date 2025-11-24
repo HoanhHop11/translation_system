@@ -1,0 +1,29 @@
+# ==============================================================================
+# VinAI Translation Service - Production Dependencies
+# ==============================================================================
+# Pinned versions cho reproducibility và stability
+# Last updated: November 18, 2025
+# ==============================================================================
+
+# Web Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+python-multipart==0.0.6
+
+# CTranslate2 - Optimized inference engine
+ctranslate2==4.0.0
+
+# Tokenizer (SentencePiece for VinAI models)
+sentencepiece==0.1.99
+transformers==4.36.0  # Chỉ dùng cho tokenizer, không load full model
+
+# Redis client cho caching
+redis==5.0.1
+hiredis==2.2.3  # C parser cho Redis, faster
+
+# Monitoring và Metrics
+prometheus-client==0.19.0
+
+# Utilities
+python-dotenv==1.0.0

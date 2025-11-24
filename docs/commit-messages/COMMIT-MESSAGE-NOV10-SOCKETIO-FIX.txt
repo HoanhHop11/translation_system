@@ -1,0 +1,25 @@
+fix(signaling): Socket.IO 404 fix - file conflict và service Args override
+
+🎯 Root Cause:
+1. File name conflict: signaling.py (old) vs signaling_socketio.py (new)
+2. Docker service Args override từ old deployment forced wrong import
+
+🔧 Changes:
+- Renamed signaling.py → signaling_old_websocket.py.bak
+- Cleared service Args override: docker service update --args ''
+- Rebuilt clean image: jackboun11/jbcalling-signaling:2.1.0
+- Updated stack-hybrid.yml image tag: 2.0.0 → 2.1.0
+
+✅ Result:
+- Socket.IO handshake working! Session ID: imJ4g9cwNcuxhra3AAAA
+- Correct CMD: uvicorn signaling_socketio:socket_app
+- Engine.IO logs appearing
+- Phase 4-5 UNBLOCKED!
+
+📄 Files Changed:
+- services/api/signaling.py → signaling_old_websocket.py.bak
+- infrastructure/swarm/stack-hybrid.yml (image: 2.1.0)
+- SOCKET-IO-FIX-NOV10.md (new documentation)
+- COMMIT-MESSAGE-NOV10-SOCKETIO-FIX.txt
+
+🚀 Status: Socket.IO fully operational, ready for frontend integration

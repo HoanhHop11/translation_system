@@ -11,6 +11,9 @@
 
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { Server as HTTPServer } from 'http';
+import { Buffer } from 'buffer';
+import axios from 'axios';
+import { config } from '../config';
 import { WorkerManager } from '../mediasoup/WorkerManager';
 import { RoomManager } from '../mediasoup/RoomManager';
 import { AudioProcessor } from '../mediasoup/AudioProcessor';
@@ -41,10 +44,17 @@ export class SignalingServer {
     this.roomManager = roomManager;
     this.audioProcessor = audioProcessor;
 
+    // Listen for transcription events
+    this.audioProcessor.on('transcription', (data) => this.handleTranscription(data));
+
     // Initialize Socket.IO với low-latency settings
+    const corsOrigins = process.env.CORS_ORIGIN
+      ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
+      : '*';
+    
     this.io = new SocketIOServer(httpServer, {
       cors: {
-        origin: process.env.CORS_ORIGIN || '*',
+        origin: corsOrigins,
         methods: ['GET', 'POST'],
         credentials: true,
       },
@@ -70,7 +80,10 @@ export class SignalingServer {
       socket.emit('connected', { socketId: socket.id });
 
       // Room management events
-      socket.on('create-room', (callback) => this.handleCreateRoom(socket, callback));
+      socket.on('create-room', (callback) => {
+        logger.info('Received create-room event', { socketId: socket.id, hasCallback: typeof callback === 'function' });
+        this.handleCreateRoom(socket, callback);
+      });
       socket.on('join-room', (data, callback) => this.handleJoinRoom(socket, data, callback));
       socket.on('leave-room', (callback) => this.handleLeaveRoom(socket, callback));
 
@@ -91,6 +104,13 @@ export class SignalingServer {
       socket.on('resume-consumer', (data, callback) => this.handleResumeConsumer(socket, data, callback));
       socket.on('pause-consumer', (data, callback) => this.handlePauseConsumer(socket, data, callback));
       socket.on('close-producer', (data, callback) => this.handleCloseProducer(socket, data, callback));
+
+      // Chat events
+      socket.on('chat-message', (data) => this.handleChatMessage(socket, data));
+
+      // Screen share events
+      socket.on('screen-share-started', (data) => this.handleScreenShareStarted(socket, data));
+      socket.on('screen-share-stopped', (data) => this.handleScreenShareStopped(socket, data));
 
       // Disconnect handling
       socket.on('disconnect', () => this.handleDisconnect(socket));
@@ -134,11 +154,18 @@ export class SignalingServer {
    */
   private async handleJoinRoom(
     socket: Socket,
-    data: { roomId: string; name: string },
+    data: { 
+      roomId: string; 
+      name: string; 
+      userid?: string;
+      token?: string;
+      sourceLanguage?: string; 
+      targetLanguage?: string;
+    },
     callback: (response: any) => void
   ): Promise<void> {
     try {
-      const { roomId, name } = data;
+      const { roomId, name, userid, token, sourceLanguage, targetLanguage } = data;
 
       // Validate input
       if (!roomId || !name) {
@@ -151,29 +178,75 @@ export class SignalingServer {
         });
       }
 
-      // Check if room exists
-      const room = this.roomManager.getRoom(roomId);
+      // TODO: Verify external JWT token nếu cần
+      // if (token) {
+      //   const isValid = await verifyExternalToken(token);
+      //   if (!isValid) {
+      //     return callback({
+      //       success: false,
+      //       error: { code: 'ERR_UNAUTHORIZED', message: 'Invalid token' }
+      //     });
+      //   }
+      // }
+
+      // Decode room ID nếu là Base64 (cho external integration)
+      let actualRoomId = roomId;
+      try {
+        // Thử decode Base64 (nếu room ID đã được encode từ external system)
+        const decoded = Buffer.from(roomId, 'base64').toString('utf-8');
+        // Check nếu decode thành công và có format hợp lệ
+        if (decoded && decoded.length > 0 && decoded.includes('_')) {
+          actualRoomId = decoded;
+          logger.info('Room ID đã được decode từ Base64', { 
+            encoded: roomId, 
+            decoded: actualRoomId 
+          });
+        }
+      } catch (e) {
+        // Nếu không phải Base64, giữ nguyên roomId
+        actualRoomId = roomId;
+      }
+      
+      // Check if room exists, nếu không tồn tại thì tự động tạo (cho external integration)
+      let room = this.roomManager.getRoom(actualRoomId);
       if (!room) {
-        return callback({
-          success: false,
-          error: {
-            code: 'ERR_ROOM_NOT_FOUND',
-            message: `Room ${roomId} không tồn tại`,
-          },
-        });
+        logger.info('Room không tồn tại, tự động tạo mới', { roomId: actualRoomId });
+        
+        // Tạo router cho room mới
+        const router = await this.workerManager.createRouter();
+        await this.roomManager.createRoom(actualRoomId, router);
+        room = this.roomManager.getRoom(actualRoomId);
+        
+        if (!room) {
+          return callback({
+            success: false,
+            error: {
+              code: 'ERR_CREATE_ROOM',
+              message: 'Không thể tạo room tự động',
+            },
+          });
+        }
       }
 
       // Generate participant ID
       const participantId = `participant_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-      // Add participant to room
-      await this.roomManager.addParticipant(roomId, participantId, socket.id, name);
+      // Add participant to room (với userid từ external system)
+      await this.roomManager.addParticipant(actualRoomId, participantId, socket.id, name, sourceLanguage, targetLanguage);
+      
+      // Lưu userid vào participant metadata (nếu có)
+      if (userid && room) {
+        const participant = room.participants.get(participantId);
+        if (participant) {
+          (participant as any).userid = userid; // External user ID
+        }
+      }
 
       // Join Socket.IO room for broadcasting
-      socket.join(roomId);
+      socket.join(actualRoomId);
 
       // Track mapping
-      this.socketToParticipant.set(socket.id, { roomId, participantId });
+      this.socketToParticipant.set(socket.id, { roomId: actualRoomId, participantId });
 
       // Get existing participants
       const participants: ParticipantData[] = [];
@@ -192,7 +265,7 @@ export class SignalingServer {
       }
 
       // Notify existing participants về new participant
-      socket.to(roomId).emit('participant-joined', {
+      socket.to(actualRoomId).emit('participant-joined', {
         id: participantId,
         name,
         joinedAt: Date.now(),
@@ -200,16 +273,18 @@ export class SignalingServer {
       });
 
       logger.info('Participant joined room', {
-        roomId,
+        roomId: actualRoomId,
+        originalRoomId: roomId,
         participantId,
         name,
+        userid,
         socketId: socket.id,
       });
 
       // Send success response
       callback({
         success: true,
-        roomId,
+        roomId: actualRoomId,
         participantId,
         participants,
         rtpCapabilities: room.router.rtpCapabilities,
@@ -230,11 +305,12 @@ export class SignalingServer {
   /**
    * Handle leave room
    */
-  private async handleLeaveRoom(socket: Socket, callback: () => void): Promise<void> {
+  private async handleLeaveRoom(socket: Socket, callback?: () => void): Promise<void> {
     try {
       const mapping = this.socketToParticipant.get(socket.id);
       if (!mapping) {
-        return callback();
+        if (callback && typeof callback === 'function') callback();
+        return;
       }
 
       const { roomId, participantId } = mapping;
@@ -253,10 +329,10 @@ export class SignalingServer {
 
       logger.info('Participant left room', { roomId, participantId, socketId: socket.id });
 
-      callback();
+      if (callback && typeof callback === 'function') callback();
     } catch (error) {
       logger.error('Error leaving room:', error);
-      callback();
+      if (callback && typeof callback === 'function') callback();
     }
   }
 
@@ -621,6 +697,88 @@ export class SignalingServer {
   }
 
   /**
+   * Handle chat message
+   */
+  private handleChatMessage(
+    socket: Socket,
+    data: { sender: string; text: string; timestamp?: number }
+  ): void {
+    try {
+      const mapping = this.socketToParticipant.get(socket.id);
+      if (!mapping) {
+        logger.warn('Chat message from participant not in room', { socketId: socket.id });
+        return;
+      }
+
+      const { roomId } = mapping;
+
+      // Broadcast to all participants in room (including sender)
+      this.io.to(roomId).emit('chat-message', {
+        sender: data.sender,
+        text: data.text,
+        timestamp: data.timestamp || Date.now(),
+        roomId,
+      });
+
+      logger.debug('Chat message broadcast', {
+        roomId,
+        sender: data.sender,
+        socketId: socket.id,
+      });
+    } catch (error) {
+      logger.error('Error handling chat message:', error);
+    }
+  }
+
+  /**
+   * Handle screen share started
+   */
+  private handleScreenShareStarted(socket: Socket, data: { roomId: string }): void {
+    try {
+      const mapping = this.socketToParticipant.get(socket.id);
+      if (!mapping) {
+        return;
+      }
+
+      const { roomId, participantId } = mapping;
+
+      // Notify other participants
+      socket.to(roomId).emit('screen-share-started', {
+        participantId,
+        roomId: data.roomId,
+      });
+
+      logger.info('Screen share started', { roomId, participantId });
+    } catch (error) {
+      logger.error('Error handling screen share started:', error);
+    }
+  }
+
+  /**
+   * Handle screen share stopped
+   */
+  private handleScreenShareStopped(socket: Socket, data: { roomId: string }): void {
+    try {
+      const mapping = this.socketToParticipant.get(socket.id);
+      if (!mapping) {
+        return;
+      }
+
+      const { roomId, participantId } = mapping;
+
+      // Notify other participants
+      socket.to(roomId).emit('screen-share-stopped', {
+        participantId,
+        roomId: data.roomId,
+      });
+
+      logger.info('Screen share stopped', { roomId, participantId });
+    } catch (error) {
+      logger.error('Error handling screen share stopped:', error);
+    }
+  }
+
+  /**
    * Handle disconnect
    */
   private async handleDisconnect(socket: Socket): Promise<void> {
@@ -629,6 +787,76 @@ export class SignalingServer {
     const mapping = this.socketToParticipant.get(socket.id);
     if (mapping) {
       await this.handleLeaveRoom(socket, () => {});
+    }
+  }
+
+  /**
+   * Handle transcription event from AudioProcessor
+   */
+  private async handleTranscription(data: { roomId: string; participantId: string; text: string; language?: string; isFinal: boolean }): Promise<void> {
+    try {
+      const { roomId, participantId, text, language, isFinal } = data;
+      
+      // Broadcast transcription to room
+      this.broadcastTranscription(roomId, {
+        participantId,
+        text,
+        language,
+        isFinal,
+        timestamp: Date.now()
+      });
+
+      // Only translate final results to save resources
+      if (isFinal && text.trim().length > 0) {
+        const room = this.roomManager.getRoom(roomId);
+        if (!room) return;
+
+        const speaker = room.participants.get(participantId);
+        const sourceLang = language || speaker?.sourceLanguage || 'vi'; // Default to Vietnamese if unknown
+
+        // Group participants by target language to batch translation requests
+        const targetLanguages = new Set<string>();
+        
+        for (const [pid, p] of room.participants.entries()) {
+          if (pid === participantId) continue; // Skip speaker
+          
+          // If participant has a target language and it's different from source
+          if (p.targetLanguage && p.targetLanguage !== sourceLang) {
+            targetLanguages.add(p.targetLanguage);
+          }
+        }
+
+        // Call translation service for each target language
+        for (const targetLang of targetLanguages) {
+          try {
+            const response = await axios.post(`${config.translation.url}/translate`, {
+              text,
+              source_lang: sourceLang,
+              target_lang: targetLang
+            });
+
+            const translatedText = response.data.translated_text;
+
+            // Broadcast translation to participants who need it
+            // We can broadcast to the whole room with targetLang info, 
+            // and clients filter what they show.
+            this.broadcastTranslation(roomId, {
+              participantId, // Original speaker
+              originalText: text,
+              translatedText,
+              sourceLanguage: sourceLang,
+              targetLanguage: targetLang,
+              isFinal: true,
+              timestamp: Date.now()
+            });
+            
+          } catch (err) {
+            logger.error(`Translation error (${sourceLang} -> ${targetLang}):`, err);
+          }
+        }
+      }
+    } catch (error) {
+      logger.error('Error handling transcription:', error);
     }
   }
 

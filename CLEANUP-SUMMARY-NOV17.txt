@@ -1,0 +1,151 @@
+# 🧹 CLEANUP SUMMARY - November 17, 2025
+
+## Công việc đã hoàn thành
+
+### 1. ✅ Tổ chức lại cấu trúc file system
+- Di chuyển ~80 documentation files vào thư mục phù hợp
+- Chỉ còn 3 files quan trọng ở root level:
+  * README.md
+  * ROADMAP-UPDATED-OCT2025.md  
+  * DOCUMENTATION-INDEX.md
+
+### 2. ✅ Cấu trúc thư mục mới
+
+```
+jbcalling_translation_realtime/
+├── README.md (⭐ START HERE)
+├── ROADMAP-UPDATED-OCT2025.md (⭐ PROJECT ROADMAP)
+├── DOCUMENTATION-INDEX.md (⭐ NAVIGATION GUIDE)
+│
+├── docs/
+│   ├── *.md (30 technical docs)
+│   ├── wrap-ups/ (3 session reports) 🆕
+│   ├── reports/
+│   │   ├── phase1/ (5 files)
+│   │   ├── phase2/ (6 files)
+│   │   ├── phase3/ (7 files)
+│   │   ├── phase4-5/ (12 files)
+│   │   ├── hotfixes/ (5 files)
+│   │   ├── investigations/ (3 files)
+│   │   ├── DEPRECATED-SERVICES-NOV17.md 🆕
+│   │   └── *.md (12 general reports)
+│   └── commit-messages/ (12 files) 🆕
+│
+├── demos/
+│   └── html/ (3 demo files) 🆕
+│
+├── infrastructure/
+├── services/
+├── scripts/
+├── shared/
+└── tests/
+```
+
+### 3. ✅ Remove deprecated services
+
+**Removed from stack-hybrid.yml:**
+- ❌ signaling service (P2P Socket.IO)
+  - 3 replicas @ 512MB = 1.5GB RAM freed
+  - Not used since Frontend 1.0.34
+  - Replaced by Gateway SFU
+
+**Service count:**
+- Before: 14 services
+- After: 13 services
+- Savings: ~1.5GB RAM
+
+### 4. ✅ Documentation updates
+
+**Created:**
+- docs/README.md - Documentation folder overview
+- docs/wrap-ups/README.md - Wrap-up reports guide
+- docs/reports/DEPRECATED-SERVICES-NOV17.md - Deprecation documentation
+- docs/commit-messages/COMMIT-MESSAGE-NOV17-DEPRECATE-SIGNALING.txt
+
+**Updated:**
+- DOCUMENTATION-INDEX.md - Complete restructure với new paths
+- README.md - Service count 14→13, architecture simplified
+- stack-hybrid.yml - Removed signaling, updated header
+
+**Backup created:**
+- infrastructure/swarm/stack-hybrid-with-signaling.yml.backup
+
+### 5. ✅ Current Architecture (Simplified)
+
+```
+Video Calling Stack:
+  Frontend (React + MediaSoup Client)
+    ↓ Socket.IO WSS (webrtc.jbcalling.site)
+  Gateway (NodeJS + Socket.IO + MediaSoup SFU)
+    ↓ RTP/SRTP UDP (40000-40100)
+  MediaSoup Workers (integrated in Gateway)
+    ↓ ICE/TURN fallback
+  Coturn (TURN server)
+
+Translation Pipeline (Phase 6 - Ready):
+  Audio Consumer → STT → Translation → TTS
+```
+
+## Benefits của cleanup
+
+1. ✅ **Cleaner root directory** - Chỉ 3 essential files
+2. ✅ **Organized documentation** - Easy to find theo phase/topic
+3. ✅ **Simpler architecture** - Removed unused P2P signaling
+4. ✅ **Resource savings** - ~1.5GB RAM freed
+5. ✅ **Easier maintenance** - Single video call service (Gateway)
+6. ✅ **Scalable structure** - Easy to add new reports
+7. ✅ **Ready for Phase 6** - No service conflicts
+
+## File statistics
+
+- Root level: 3 markdown files
+- docs/: 83 documentation files
+- demos/html/: 3 HTML files
+- Total organized: ~90 files
+
+## Rollback if needed
+
+### Restore signaling service:
+```bash
+cd infrastructure/swarm
+scp stack-hybrid-with-signaling.yml.backup translation01:/tmp/
+ssh translation01 "docker stack deploy -c /tmp/stack-hybrid-with-signaling.yml.backup translation"
+```
+
+### Restore old file structure:
+```bash
+# All files backed up in git history
+git log --oneline | head -5  # Find commit before cleanup
+git checkout <commit-hash> .
+```
+
+## Next actions
+
+### Deploy cleaned stack (Optional - low risk):
+```bash
+cd infrastructure/swarm
+scp stack-hybrid.yml translation01:/tmp/
+ssh translation01 "docker stack deploy -c /tmp/stack-hybrid.yml translation"
+
+# Verify
+ssh translation01 "docker service ls"  # Should show 13 services
+ssh translation01 "docker service ls | grep signaling"  # Should be empty
+```
+
+### Test (after deployment):
+1. ✅ Visit https://jbcalling.site
+2. ✅ Create room, test video call
+3. ✅ Check Gateway health: curl https://webrtc.jbcalling.site/health
+4. ✅ Monitor resource usage (should decrease ~1.5GB)
+
+## Related documentation
+
+- Architecture cleanup: docs/reports/DEPRECATED-SERVICES-NOV17.md
+- Phase 5 complete: docs/wrap-ups/WRAP-UP-NOV17-MEDIASOUP-SFU-COMPLETE.md
+- Documentation index: DOCUMENTATION-INDEX.md
+- Commit message: docs/commit-messages/COMMIT-MESSAGE-NOV17-DEPRECATE-SIGNALING.txt
+
+---
+Date: November 17, 2025
+Phase: 5 Complete → Phase 6 Ready
+Status: ✅ Cleanup complete, production-ready

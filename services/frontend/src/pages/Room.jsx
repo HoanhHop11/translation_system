@@ -1,1594 +1,336 @@
-import { useEffect, useState, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import io from 'socket.io-client'
-import { Device } from 'mediasoup-client'
-import { 
-  Mic, 
-  MicOff, 
-  Video, 
-  VideoOff,
-  Monitor, 
-  MonitorOff,
-  PhoneOff,
-  Settings,
-  MessageSquare,
-  Users,
-  Volume2, 
-  VolumeX,
-  Loader2,
-  Send,
-  X
-} from 'lucide-react'
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useWebRTC } from '../contexts/WebRTCContext';
+import { Loader2, AlertCircle, Wifi } from 'lucide-react';
+import VideoGrid from '../components/room/VideoGrid';
+import ControlsBar from '../components/room/ControlsBar';
+import CaptionsOverlay from '../components/room/CaptionsOverlay';
+import ChatPanel from '../components/room/ChatPanel';
+import ParticipantsPanel from '../components/room/ParticipantsPanel';
+import SettingsPanel from '../components/room/SettingsPanel';
 
-/**
- * Room Component - Video Call Interface
- * 
- * Tính năng:
- * - WebRTC video/audio streaming
- * - Real-time translation & captions
- * - Screen sharing
- * - Chat system
- * - Device controls
- * - Settings panel
- */
 export default function Room() {
-  const { roomId } = useParams()
-  const navigate = useNavigate()
+  const { roomId } = useParams();
+  const navigate = useNavigate();
   
-  // ============================================
-  // STATE MANAGEMENT
-  // ============================================
+  const {
+    socket, isConnected, userId, connectionState, iceConnectionState,
+    participants, localStream, remoteStreams, joinRoom, leaveRoom,
+    toggleAudio, toggleVideo, sourceLanguage, targetLanguage,
+    setSourceLanguage, setTargetLanguage, transcriptions
+  } = useWebRTC();
   
-  // User & Connection State
-  const [userId] = useState(() => {
-    return localStorage.getItem('jb_username') || 
-           'anonymous-' + Math.random().toString(36).substring(7)
-  })
-  const [username] = useState(() => {
-    return localStorage.getItem('jb_username') || 'Anonymous'
-  })
-  const [socket, setSocket] = useState(null)
-  const [connectionState, setConnectionState] = useState('connecting')
+  const [username] = useState(() => localStorage.getItem('jb_username') || 'Anonymous');
+  const [isAudioEnabled, setIsAudioEnabled] = useState(true);
+  const [isVideoEnabled, setIsVideoEnabled] = useState(true);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const [isJoining, setIsJoining] = useState(true);
+  const [error, setError] = useState(null);
+  const [captionMode, setCaptionMode] = useState('bilingual');
+  const [visibleCaptions, setVisibleCaptions] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [connectionQuality, setConnectionQuality] = useState('good');
+  const [latency, setLatency] = useState(0);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [connectionStates, setConnectionStates] = useState(new Map());
+  const controlsTimeoutRef = useRef(null);
+  const hasJoinedRef = useRef(false);
   
-  // Media State
-  const [isAudioEnabled, setIsAudioEnabled] = useState(true)
-  const [isVideoEnabled, setIsVideoEnabled] = useState(true)
-  const [isScreenSharing, setIsScreenSharing] = useState(false)
-  const [localStream, setLocalStream] = useState(null)
-  const [screenStream, setScreenStream] = useState(null)
-  
-  // Participants State
-  const [participants, setParticipants] = useState([])
-  const [activeSpeaker, setActiveSpeaker] = useState(null)
-  
-  // UI State
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [isChatOpen, setIsChatOpen] = useState(false)
-  const [isParticipantsOpen, setIsParticipantsOpen] = useState(false)
-  const [showControls, setShowControls] = useState(true)
-  
-  // Translation & Caption State
-  const [translationEnabled, setTranslationEnabled] = useState(false)
-  const [captions, setCaptions] = useState([])
-  const [sourceLanguage, setSourceLanguage] = useState('vi')
-  const [targetLanguage, setTargetLanguage] = useState('en')
-  const [captionMode, setCaptionMode] = useState('off') // off, source, target, bilingual
-  
-  // Chat State
-  const [messages, setMessages] = useState([])
-  const [newMessage, setNewMessage] = useState('')
-  const [unreadCount, setUnreadCount] = useState(0)
-  
-  // Device State
-  const [audioDevices, setAudioDevices] = useState([])
-  const [videoDevices, setVideoDevices] = useState([])
-  const [outputDevices, setOutputDevices] = useState([])
-  const [selectedAudioDevice, setSelectedAudioDevice] = useState('')
-  const [selectedVideoDevice, setSelectedVideoDevice] = useState('')
-  const [selectedOutputDevice, setSelectedOutputDevice] = useState('')
-  
-  // Refs
-  const localVideoRef = useRef(null)
-  const controlsTimeoutRef = useRef(null)
-  const chatEndRef = useRef(null)
-  const captionEndRef = useRef(null)
-  
-  // MediaSoup State & Refs
-  const [mediasoupDevice, setMediasoupDevice] = useState(null)
-  const [sendTransport, setSendTransport] = useState(null)
-  const [recvTransport, setRecvTransport] = useState(null)
-  const [audioProducer, setAudioProducer] = useState(null)
-  const [videoProducer, setVideoProducer] = useState(null)
-  const [screenProducer, setScreenProducer] = useState(null)
-  const consumersRef = useRef(new Map()) // userId -> { audio: Consumer, video: Consumer }
-  const remoteStreamsRef = useRef(new Map()) // userId -> MediaStream
-
-  // ============================================
-  // INITIALIZATION & CLEANUP
-  // ============================================
-
   useEffect(() => {
-    if (!username) {
-      navigate('/')
-      return
-    }
-
-    // Initialize Socket.IO connection
-    const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:3001'
-    console.log('🔌 Connecting to gateway:', gatewayUrl)
-    
-    const newSocket = io(gatewayUrl, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionAttempts: 5,
-      timeout: 10000
-    })
-
-    newSocket.on('connect', () => {
-      console.log('✅ Connected to signaling server')
-      setConnectionState('connected')
-      
-      // Join room
-      newSocket.emit('join-room', {
-        roomId,
-        userId,
-        username
-      })
-    })
-
-    newSocket.on('disconnect', (reason) => {
-      console.log('❌ Disconnected from signaling server:', reason)
-      setConnectionState('disconnected')
-    })
-
-    newSocket.on('connect_error', (error) => {
-      console.error('Connection error:', error)
-      setConnectionState('failed')
-    })
-
-    // Room events
-    newSocket.on('room-joined', (data) => {
-      console.log('🎉 Joined room:', data)
-      setParticipants(data.participants || [])
-    })
-
-    newSocket.on('user-joined', (data) => {
-      console.log('👋 User joined:', data)
-      setParticipants(prev => {
-        if (prev.some(p => p.userId === data.userId)) {
-          return prev
-        }
-        return [...prev, data]
-      })
-      addSystemMessage(`${data.username} đã tham gia cuộc gọi`)
-    })
-
-    newSocket.on('user-left', (data) => {
-      console.log('👋 User left:', data)
-      setParticipants(prev => prev.filter(p => p.userId !== data.userId))
-      addSystemMessage(`${data.username} đã rời cuộc gọi`)
-    })
-
-    // Media state events
-    newSocket.on('user-audio-state', (data) => {
-      console.log('🎤 User audio state:', data)
-      setParticipants(prev => prev.map(p => 
-        p.userId === data.userId 
-          ? { ...p, audioEnabled: data.enabled }
-          : p
-      ))
-    })
-
-    newSocket.on('user-video-state', (data) => {
-      console.log('📹 User video state:', data)
-      setParticipants(prev => prev.map(p => 
-        p.userId === data.userId 
-          ? { ...p, videoEnabled: data.enabled }
-          : p
-      ))
-    })
-
-    // Caption events
-    newSocket.on('caption', (data) => {
-      console.log('💬 Caption received:', data)
-      addCaption(data)
-    })
-
-    // Chat events
-    newSocket.on('chat-message', (data) => {
-      console.log('📨 Chat message:', data)
-      addMessage(data)
-      
-      if (!isChatOpen && data.userId !== userId) {
-        setUnreadCount(prev => prev + 1)
-      }
-    })
-
-    // Active speaker detection
-    newSocket.on('active-speaker', (data) => {
-      setActiveSpeaker(data.userId)
-      setTimeout(() => setActiveSpeaker(null), 3000)
-    })
-
-    // ====================================================
-    // MEDIASOUP SOCKET EVENTS
-    // ====================================================
-
-    // New producer từ remote participant
-    newSocket.on('newProducer', async (data) => {
-      console.log('📡 New producer from remote:', data)
-      const { producerId, producerUserId, kind } = data
-      
-      // Skip nếu là producer của chính mình
-      if (producerUserId === userId) {
-        console.log('⏭️  Skipping own producer')
-        return
-      }
-      
-      try {
-        await consumeMedia(producerId, producerUserId, kind)
-      } catch (error) {
-        console.error('Failed to consume new producer:', error)
-      }
-    })
-
-    // Producer closed từ remote participant
-    newSocket.on('producerClosed', (data) => {
-      console.log('🚫 Producer closed from remote:', data)
-      const { producerId, producerUserId, kind } = data
-      
-      // Remove consumer và track
-      const userConsumers = consumersRef.current.get(producerUserId)
-      if (userConsumers && userConsumers[kind]) {
-        const consumer = userConsumers[kind]
-        consumer.close()
-        
-        // Remove track from stream
-        const remoteStream = remoteStreamsRef.current.get(producerUserId)
-        if (remoteStream) {
-          remoteStream.removeTrack(consumer.track)
-        }
-        
-        delete userConsumers[kind]
-        if (Object.keys(userConsumers).length === 0) {
-          consumersRef.current.delete(producerUserId)
-          remoteStreamsRef.current.delete(producerUserId)
-        }
-      }
-    })
-
-    setSocket(newSocket)
-
-    // Initialize media devices THEN MediaSoup
-    const initializeEverything = async () => {
-      try {
-        await initializeMediaDevices()
-        
-        // Wait cho socket connect
-        await new Promise((resolve) => {
-          if (newSocket.connected) {
-            resolve()
-          } else {
-            newSocket.once('connect', resolve)
-          }
-        })
-        
-        // Initialize MediaSoup
-        await initializeMediasoup()
-        
-        // Start producing local media
-        await startProducing()
-        
-        console.log('✅ Full initialization complete')
-      } catch (error) {
-        console.error('❌ Initialization failed:', error)
-        setConnectionState('failed')
-      }
+    if (!roomId) { 
+      navigate('/'); 
+      return; 
     }
     
-    initializeEverything()
-
-    return () => {
-      console.log('🧹 Cleaning up Room component')
-      
-      // Close producers
-      if (audioProducer) {
-        audioProducer.close()
-      }
-      if (videoProducer) {
-        videoProducer.close()
-      }
-      if (screenProducer) {
-        screenProducer.close()
-      }
-      
-      // Close consumers
-      consumersRef.current.forEach((userConsumers) => {
-        Object.values(userConsumers).forEach(consumer => {
-          if (consumer) consumer.close()
-        })
-      })
-      consumersRef.current.clear()
-      remoteStreamsRef.current.clear()
-      
-      // Close transports
-      if (sendTransport) {
-        sendTransport.close()
-      }
-      if (recvTransport) {
-        recvTransport.close()
-      }
-      
-      // Stop local streams
-      if (localStream) {
-        localStream.getTracks().forEach(track => track.stop())
-      }
-      if (screenStream) {
-        screenStream.getTracks().forEach(track => track.stop())
-      }
-      
-      // Disconnect socket
-      if (newSocket) {
-        newSocket.emit('leave-room', { roomId, userId })
-        newSocket.disconnect()
-      }
+    // Prevent double join (React Strict Mode in dev)
+    if (hasJoinedRef.current) {
+      console.log('⚠️ Already joined, skipping...');
+      return;
     }
-  }, [username, roomId, navigate, userId])
-
-  // Auto-hide controls
-  useEffect(() => {
-    const handleMouseMove = () => {
-      setShowControls(true)
-      if (controlsTimeoutRef.current) {
-        clearTimeout(controlsTimeoutRef.current)
+    
+    const initRoom = async () => {
+      try {
+        setIsJoining(true);
+        setError(null);
+        hasJoinedRef.current = true;
+        await joinRoom(roomId, { userId: username, language: sourceLanguage, targetLanguage });
+        setIsJoining(false);
+      } catch (error) {
+        setError(error.message || 'Không thể tham gia phòng');
+        setIsJoining(false);
+        hasJoinedRef.current = false; // Reset on error
       }
-      controlsTimeoutRef.current = setTimeout(() => {
-        setShowControls(false)
-      }, 3000)
-    }
-
-    const handleKeyDown = () => {
-      setShowControls(true)
-    }
-
-    window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('keydown', handleKeyDown)
+    };
+    
+    initRoom();
     
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('keydown', handleKeyDown)
-      if (controlsTimeoutRef.current) {
-        clearTimeout(controlsTimeoutRef.current)
-      }
-    }
-  }, [])
-
-  // Auto-scroll chat
+      leaveRoom();
+      hasJoinedRef.current = false;
+    };
+  }, [roomId]); // Only depend on roomId, not on joinRoom/leaveRoom functions
+  
   useEffect(() => {
-    if (isChatOpen) {
-      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-      setUnreadCount(0)
+    if (transcriptions.length > 0 && captionMode !== 'off') {
+      const latest = transcriptions[transcriptions.length - 1];
+      const captionId = Date.now() + '-' + Math.random();
+      setVisibleCaptions(prev => [...prev, { ...latest, id: captionId }].slice(-3));
+      setTimeout(() => setVisibleCaptions(prev => prev.filter(c => c.id !== captionId)), 5000);
     }
-  }, [messages, isChatOpen])
-
-  // Auto-scroll captions
+  }, [transcriptions, captionMode]);
+  
   useEffect(() => {
-    captionEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [captions])
-
-  // ============================================
-  // MEDIA DEVICE INITIALIZATION
-  // ============================================
-
-  const initializeMediaDevices = async () => {
-    try {
-      console.log('🎥 Requesting media permissions...')
-      
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: 'user'
-        },
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
-      })
-
-      console.log('✅ Media permissions granted')
-      setLocalStream(stream)
-      
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream
-      }
-
-      // Enumerate devices
-      const devices = await navigator.mediaDevices.enumerateDevices()
-      const audio = devices.filter(d => d.kind === 'audioinput')
-      const video = devices.filter(d => d.kind === 'videoinput')
-      const output = devices.filter(d => d.kind === 'audiooutput')
-      
-      setAudioDevices(audio)
-      setVideoDevices(video)
-      setOutputDevices(output)
-      
-      // Set defaults
-      const audioTrack = stream.getAudioTracks()[0]
-      const videoTrack = stream.getVideoTracks()[0]
-      
-      if (audioTrack) {
-        setSelectedAudioDevice(audioTrack.getSettings().deviceId || audio[0]?.deviceId || '')
-      }
-      if (videoTrack) {
-        setSelectedVideoDevice(videoTrack.getSettings().deviceId || video[0]?.deviceId || '')
-      }
-      if (output.length > 0) {
-        setSelectedOutputDevice(output[0].deviceId)
-      }
-
-      console.log('✅ Devices:', { audio: audio.length, video: video.length, output: output.length })
-    } catch (error) {
-      console.error('❌ Failed to initialize media:', error)
-      
-      let errorMessage = 'Không thể khởi tạo camera/microphone.'
-      if (error.name === 'NotAllowedError') {
-        errorMessage = 'Bạn đã từ chối quyền truy cập. Vui lòng cấp quyền trong cài đặt trình duyệt.'
-      } else if (error.name === 'NotFoundError') {
-        errorMessage = 'Không tìm thấy camera hoặc microphone.'
-      } else if (error.name === 'NotReadableError') {
-        errorMessage = 'Camera/microphone đang được sử dụng bởi ứng dụng khác.'
-      }
-      
-      alert(errorMessage)
-      setConnectionState('failed')
-    }
-  }
-
-  // ============================================
-  // MEDIASOUP INTEGRATION
-  // ============================================
-
-  /**
-   * Initialize MediaSoup Device và load router RTP capabilities
-   */
-  const initializeMediasoup = async () => {
-    try {
-      console.log('🎬 Initializing MediaSoup device...')
-      
-      if (!socket) {
-        throw new Error('Socket not connected')
-      }
-
-      // Create MediaSoup Device
-      const device = new Device()
-      
-      // Request router RTP capabilities from Gateway
-      const routerRtpCapabilities = await new Promise((resolve, reject) => {
-        socket.emit('getRouterRtpCapabilities', { roomId }, (response) => {
-          if (response.error) {
-            reject(new Error(response.error))
-          } else {
-            resolve(response.rtpCapabilities)
-          }
-        })
-        
-        // Timeout sau 10s
-        setTimeout(() => reject(new Error('Timeout getting router capabilities')), 10000)
-      })
-
-      console.log('✅ Got router RTP capabilities')
-      
-      // Load device với router capabilities
-      await device.load({ routerRtpCapabilities })
-      console.log('✅ MediaSoup device loaded')
-      
-      // Check device capabilities
-      const canProduceVideo = device.canProduce('video')
-      const canProduceAudio = device.canProduce('audio')
-      console.log(`📹 Can produce: video=${canProduceVideo}, audio=${canProduceAudio}`)
-      
-      if (!canProduceVideo || !canProduceAudio) {
-        throw new Error('Device cannot produce media')
-      }
-      
-      setMediasoupDevice(device)
-      
-      // Create transports
-      await createTransports(device)
-      
-      return device
-    } catch (error) {
-      console.error('❌ Failed to initialize MediaSoup:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Create Send và Receive Transports
-   */
-  const createTransports = async (device) => {
-    try {
-      console.log('🚚 Creating transports...')
-      
-      // Create Send Transport
-      const sendTransportParams = await new Promise((resolve, reject) => {
-        socket.emit('createWebRtcTransport', {
-          roomId,
-          userId,
-          forceTcp: false,
-          producing: true,
-          consuming: false
-        }, (response) => {
-          if (response.error) {
-            reject(new Error(response.error))
-          } else {
-            resolve(response)
-          }
-        })
-        setTimeout(() => reject(new Error('Timeout creating send transport')), 10000)
-      })
-
-      console.log('✅ Got send transport params')
-      
-      const sendTrans = device.createSendTransport({
-        id: sendTransportParams.id,
-        iceParameters: sendTransportParams.iceParameters,
-        iceCandidates: sendTransportParams.iceCandidates,
-        dtlsParameters: sendTransportParams.dtlsParameters,
-        sctpParameters: sendTransportParams.sctpParameters
-      })
-
-      // Handle send transport events
-      sendTrans.on('connect', async ({ dtlsParameters }, callback, errback) => {
-        try {
-          console.log('🔗 Send transport connecting...')
-          await new Promise((resolve, reject) => {
-            socket.emit('connectWebRtcTransport', {
-              roomId,
-              transportId: sendTrans.id,
-              dtlsParameters
-            }, (response) => {
-              if (response.error) {
-                reject(new Error(response.error))
-              } else {
-                resolve()
-              }
-            })
-            setTimeout(() => reject(new Error('Timeout connecting transport')), 10000)
-          })
-          console.log('✅ Send transport connected')
-          callback()
-        } catch (error) {
-          console.error('❌ Send transport connect failed:', error)
-          errback(error)
-        }
-      })
-
-      sendTrans.on('produce', async ({ kind, rtpParameters, appData }, callback, errback) => {
-        try {
-          console.log(`📤 Producing ${kind}...`)
-          const { id } = await new Promise((resolve, reject) => {
-            socket.emit('produce', {
-              roomId,
-              transportId: sendTrans.id,
-              kind,
-              rtpParameters,
-              appData
-            }, (response) => {
-              if (response.error) {
-                reject(new Error(response.error))
-              } else {
-                resolve(response)
-              }
-            })
-            setTimeout(() => reject(new Error('Timeout producing')), 10000)
-          })
-          console.log(`✅ Producer created: ${kind} - ${id}`)
-          callback({ id })
-        } catch (error) {
-          console.error(`❌ Produce ${kind} failed:`, error)
-          errback(error)
-        }
-      })
-
-      sendTrans.on('connectionstatechange', (state) => {
-        console.log(`🚦 Send transport state: ${state}`)
-        if (state === 'failed' || state === 'closed') {
-          console.error('❌ Send transport failed/closed')
-          setConnectionState('failed')
-        }
-      })
-
-      setSendTransport(sendTrans)
-
-      // Create Receive Transport
-      const recvTransportParams = await new Promise((resolve, reject) => {
-        socket.emit('createWebRtcTransport', {
-          roomId,
-          userId,
-          forceTcp: false,
-          producing: false,
-          consuming: true
-        }, (response) => {
-          if (response.error) {
-            reject(new Error(response.error))
-          } else {
-            resolve(response)
-          }
-        })
-        setTimeout(() => reject(new Error('Timeout creating recv transport')), 10000)
-      })
-
-      console.log('✅ Got recv transport params')
-      
-      const recvTrans = device.createRecvTransport({
-        id: recvTransportParams.id,
-        iceParameters: recvTransportParams.iceParameters,
-        iceCandidates: recvTransportParams.iceCandidates,
-        dtlsParameters: recvTransportParams.dtlsParameters,
-        sctpParameters: recvTransportParams.sctpParameters
-      })
-
-      recvTrans.on('connect', async ({ dtlsParameters }, callback, errback) => {
-        try {
-          console.log('🔗 Recv transport connecting...')
-          await new Promise((resolve, reject) => {
-            socket.emit('connectWebRtcTransport', {
-              roomId,
-              transportId: recvTrans.id,
-              dtlsParameters
-            }, (response) => {
-              if (response.error) {
-                reject(new Error(response.error))
-              } else {
-                resolve()
-              }
-            })
-            setTimeout(() => reject(new Error('Timeout connecting transport')), 10000)
-          })
-          console.log('✅ Recv transport connected')
-          callback()
-        } catch (error) {
-          console.error('❌ Recv transport connect failed:', error)
-          errback(error)
-        }
-      })
-
-      recvTrans.on('connectionstatechange', (state) => {
-        console.log(`🚦 Recv transport state: ${state}`)
-        if (state === 'failed' || state === 'closed') {
-          console.error('❌ Recv transport failed/closed')
-        }
-      })
-
-      setRecvTransport(recvTrans)
-
-      console.log('✅ Transports created successfully')
-    } catch (error) {
-      console.error('❌ Failed to create transports:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Start producing local media (audio + video)
-   */
-  const startProducing = async () => {
-    try {
-      if (!sendTransport || !localStream) {
-        throw new Error('Send transport or local stream not ready')
-      }
-
-      console.log('🎬 Starting to produce media...')
-
-      // Produce audio
-      const audioTrack = localStream.getAudioTracks()[0]
-      if (audioTrack) {
-        const producer = await sendTransport.produce({
-          track: audioTrack,
-          codecOptions: {
-            opusStereo: true,
-            opusDtx: true
-          },
-          appData: { type: 'audio', userId }
-        })
-        console.log('✅ Audio producer created:', producer.id)
-        setAudioProducer(producer)
-        
-        producer.on('transportclose', () => {
-          console.log('🚫 Audio producer transport closed')
-          setAudioProducer(null)
-        })
-        
-        producer.on('trackended', () => {
-          console.log('🎤 Audio track ended')
-        })
-      }
-
-      // Produce video
-      const videoTrack = localStream.getVideoTracks()[0]
-      if (videoTrack) {
-        const producer = await sendTransport.produce({
-          track: videoTrack,
-          encodings: [
-            { maxBitrate: 100000, scaleResolutionDownBy: 4 },
-            { maxBitrate: 300000, scaleResolutionDownBy: 2 },
-            { maxBitrate: 900000, scaleResolutionDownBy: 1 }
-          ],
-          codecOptions: {
-            videoGoogleStartBitrate: 1000
-          },
-          appData: { type: 'video', userId }
-        })
-        console.log('✅ Video producer created:', producer.id)
-        setVideoProducer(producer)
-        
-        producer.on('transportclose', () => {
-          console.log('🚫 Video producer transport closed')
-          setVideoProducer(null)
-        })
-        
-        producer.on('trackended', () => {
-          console.log('📹 Video track ended')
-        })
-      }
-
-      console.log('✅ Media production started')
-    } catch (error) {
-      console.error('❌ Failed to start producing:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Consume remote participant's media
-   */
-  const consumeMedia = async (producerId, producerUserId, kind) => {
-    try {
-      if (!recvTransport || !mediasoupDevice) {
-        throw new Error('Recv transport or device not ready')
-      }
-
-      console.log(`📥 Consuming ${kind} from ${producerUserId}...`)
-
-      const { id, rtpParameters } = await new Promise((resolve, reject) => {
-        socket.emit('consume', {
-          roomId,
-          transportId: recvTransport.id,
-          producerId,
-          rtpCapabilities: mediasoupDevice.rtpCapabilities
-        }, (response) => {
-          if (response.error) {
-            reject(new Error(response.error))
-          } else {
-            resolve(response)
-          }
-        })
-        setTimeout(() => reject(new Error('Timeout consuming')), 10000)
-      })
-
-      const consumer = await recvTransport.consume({
-        id,
-        producerId,
-        kind,
-        rtpParameters
-      })
-
-      console.log(`✅ Consumer created: ${kind} from ${producerUserId}`)
-
-      // Store consumer
-      if (!consumersRef.current.has(producerUserId)) {
-        consumersRef.current.set(producerUserId, {})
-      }
-      consumersRef.current.get(producerUserId)[kind] = consumer
-
-      // Resume consumer on server
-      socket.emit('resumeConsumer', {
-        roomId,
-        consumerId: consumer.id
-      })
-
-      // Get or create remote stream
-      let remoteStream = remoteStreamsRef.current.get(producerUserId)
-      if (!remoteStream) {
-        remoteStream = new MediaStream()
-        remoteStreamsRef.current.set(producerUserId, remoteStream)
-      }
-
-      // Add track to stream
-      remoteStream.addTrack(consumer.track)
-
-      // Update participants với remote stream
-      setParticipants(prev => prev.map(p =>
-        p.userId === producerUserId
-          ? { ...p, stream: remoteStream }
-          : p
-      ))
-
-      consumer.on('transportclose', () => {
-        console.log(`🚫 Consumer transport closed: ${kind} from ${producerUserId}`)
-      })
-
-      consumer.on('producerclose', () => {
-        console.log(`🚫 Producer closed: ${kind} from ${producerUserId}`)
-        // Remove track from stream
-        remoteStream.removeTrack(consumer.track)
-        
-        // Remove consumer
-        const userConsumers = consumersRef.current.get(producerUserId)
-        if (userConsumers) {
-          delete userConsumers[kind]
-          if (Object.keys(userConsumers).length === 0) {
-            consumersRef.current.delete(producerUserId)
-            remoteStreamsRef.current.delete(producerUserId)
-          }
-        }
-      })
-
-      return consumer
-    } catch (error) {
-      console.error(`❌ Failed to consume ${kind}:`, error)
-      throw error
-    }
-  }
-
-  // ============================================
-  // MEDIA CONTROLS
-  // ============================================
-
-  const toggleAudio = () => {
-    if (localStream) {
-      const audioTrack = localStream.getAudioTracks()[0]
-      if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled
-        setIsAudioEnabled(audioTrack.enabled)
-        
-        if (socket) {
-          socket.emit('audio-state-change', {
-            roomId,
-            userId,
-            enabled: audioTrack.enabled
-          })
-        }
-      }
-    }
-  }
-
-  const toggleVideo = () => {
-    if (localStream) {
-      const videoTrack = localStream.getVideoTracks()[0]
-      if (videoTrack) {
-        videoTrack.enabled = !videoTrack.enabled
-        setIsVideoEnabled(videoTrack.enabled)
-        
-        if (socket) {
-          socket.emit('video-state-change', {
-            roomId,
-            userId,
-            enabled: videoTrack.enabled
-          })
-        }
-      }
-    }
-  }
-
-  const toggleScreenShare = async () => {
-    if (isScreenSharing) {
-      if (screenStream) {
-        screenStream.getTracks().forEach(track => track.stop())
-        setScreenStream(null)
-        setIsScreenSharing(false)
-        
-        if (localVideoRef.current && localStream) {
-          localVideoRef.current.srcObject = localStream
-        }
-        
-        if (socket) {
-          socket.emit('screen-share-stopped', { roomId, userId })
-        }
-      }
-    } else {
-      try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({
-          video: { cursor: 'always' },
-          audio: false
-        })
-
-        setScreenStream(stream)
-        setIsScreenSharing(true)
-        
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream
-        }
-        
-        if (socket) {
-          socket.emit('screen-share-started', { roomId, userId })
-        }
-
-        stream.getVideoTracks()[0].onended = () => {
-          setScreenStream(null)
-          setIsScreenSharing(false)
-          
-          if (localVideoRef.current && localStream) {
-            localVideoRef.current.srcObject = localStream
-          }
-          
-          if (socket) {
-            socket.emit('screen-share-stopped', { roomId, userId })
-          }
-        }
-      } catch (error) {
-        if (error.name !== 'NotAllowedError') {
-          alert('Không thể chia sẻ màn hình.')
-        }
-      }
-    }
-  }
-
-  const leaveCall = () => {
-    if (confirm('Bạn có chắc muốn rời khỏi cuộc gọi?')) {
-      if (socket) {
-        socket.emit('leave-room', { roomId, userId })
-      }
-      navigate('/')
-    }
-  }
-
-  // ============================================
-  // TRANSLATION & CAPTIONS
-  // ============================================
-
-  const toggleTranslation = () => {
-    const newState = !translationEnabled
-    setTranslationEnabled(newState)
+    if (!socket) return;
+    const pingInterval = setInterval(() => {
+      const start = Date.now();
+      socket.emit('ping', () => {
+        const ms = Date.now() - start;
+        setLatency(ms);
+        setConnectionQuality(ms < 100 ? 'good' : ms < 300 ? 'fair' : 'poor');
+      });
+    }, 5000);
+    return () => clearInterval(pingInterval);
+  }, [socket]);
+  
+  useEffect(() => {
+    if (iceConnectionState === 'failed') setError('Kết nối P2P thất bại');
+    else if (iceConnectionState === 'disconnected') setError('Mất kết nối video');
+    else if (iceConnectionState === 'connected' || iceConnectionState === 'completed') setError(null);
+  }, [iceConnectionState]);
+  
+  // Socket event handlers for chat
+  useEffect(() => {
+    if (!socket) return;
     
-    if (socket) {
-      socket.emit('translation-state-change', {
-        roomId,
-        userId,
-        enabled: newState,
-        sourceLanguage,
-        targetLanguage
-      })
-    }
-  }
-
-  const addCaption = (data) => {
-    const caption = {
-      id: Date.now() + Math.random(),
-      userId: data.userId,
-      username: data.username,
-      userColor: data.userColor || getUserColor(data.userId),
-      textSource: data.textSource || data.text,
-      textTarget: data.textTarget || '',
-      timestamp: data.timestamp || Date.now()
-    }
+    const handleChatMessage = (data) => {
+      setMessages(prev => [...prev, {
+        sender: data.sender,
+        text: data.text,
+        timestamp: data.timestamp || Date.now()
+      }]);
+      
+      // Tăng unread count nếu chat panel đang đóng
+      if (!isChatOpen) {
+        setUnreadCount(prev => prev + 1);
+      }
+    };
     
-    setCaptions(prev => [...prev, caption].slice(-50))
-    setTimeout(() => {
-      setCaptions(prev => prev.filter(c => c.id !== caption.id))
-    }, 5000)
-  }
-
-  const getUserColor = (userId) => {
-    const colors = ['#14b8a6', '#8b5cf6', '#f59e0b', '#3b82f6', '#ec4899', '#10b981', '#f43f5e', '#6366f1']
-    let hash = 0
-    for (let i = 0; i < userId.length; i++) {
-      hash = userId.charCodeAt(i) + ((hash << 5) - hash)
-    }
-    return colors[Math.abs(hash) % colors.length]
-  }
-
-  // ============================================
-  // CHAT FUNCTIONS
-  // ============================================
-
-  const addMessage = (data) => {
-    const message = {
-      id: Date.now() + Math.random(),
-      userId: data.userId,
-      username: data.username,
-      message: data.message,
-      timestamp: data.timestamp || Date.now(),
-      type: data.type || 'user'
-    }
-    setMessages(prev => [...prev, message])
-  }
-
-  const addSystemMessage = (text) => {
-    addMessage({
-      userId: 'system',
-      username: 'System',
-      message: text,
-      type: 'system'
-    })
-  }
-
-  const sendMessage = (e) => {
-    e.preventDefault()
-    if (!newMessage.trim()) return
+    socket.on('chat-message', handleChatMessage);
     
-    const message = {
+    return () => {
+      socket.off('chat-message', handleChatMessage);
+    };
+  }, [socket, isChatOpen]);
+  
+  // Socket reconnection handlers
+  useEffect(() => {
+    if (!socket) return;
+    
+    const handleDisconnect = () => {
+      setReconnecting(true);
+      setError('Mất kết nối với server...');
+    };
+    
+    const handleReconnect = () => {
+      setReconnecting(false);
+      setError(null);
+    };
+    
+    const handleReconnectError = () => {
+      setError('Không thể kết nối lại với server');
+    };
+    
+    const handleReconnectFailed = () => {
+      setError('Kết nối thất bại. Vui lòng tải lại trang.');
+    };
+    
+    socket.on('disconnect', handleDisconnect);
+    socket.on('reconnect', handleReconnect);
+    socket.on('reconnect_error', handleReconnectError);
+    socket.on('reconnect_failed', handleReconnectFailed);
+    
+    return () => {
+      socket.off('disconnect', handleDisconnect);
+      socket.off('reconnect', handleReconnect);
+      socket.off('reconnect_error', handleReconnectError);
+      socket.off('reconnect_failed', handleReconnectFailed);
+    };
+  }, [socket]);
+  
+  // Track connection states for participants panel
+  useEffect(() => {
+    const newStates = new Map();
+    participants.forEach((info, peerId) => {
+      newStates.set(peerId, {
+        connectionState: connectionState.get(peerId)?.connectionState || 'new',
+        iceConnectionState: connectionState.get(peerId)?.iceConnectionState || 'new'
+      });
+    });
+    setConnectionStates(newStates);
+  }, [participants, connectionState]);
+  
+  const handleToggleAudio = useCallback(() => setIsAudioEnabled(toggleAudio()), [toggleAudio]);
+  const handleToggleVideo = useCallback(() => setIsVideoEnabled(toggleVideo()), [toggleVideo]);
+  const handleScreenShare = useCallback(async () => {
+    try {
+      if (!isScreenSharing) {
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+        stream.getVideoTracks()[0].onended = () => setIsScreenSharing(false);
+        setIsScreenSharing(true);
+      } else {
+        setIsScreenSharing(false);
+      }
+    } catch (err) { if (err.name !== 'NotAllowedError') alert('Lỗi: ' + err.message); }
+  }, [isScreenSharing]);
+  
+  const handleLeaveCall = useCallback(() => {
+    if (confirm('Rời khỏi cuộc gọi?')) { leaveRoom(); navigate('/'); }
+  }, [leaveRoom, navigate]);
+  
+  const handleSendMessage = useCallback(() => {
+    if (!newMessage.trim() || !socket) return;
+    
+    const messageData = {
       roomId,
-      userId,
-      username,
-      message: newMessage.trim(),
+      sender: username,
+      text: newMessage.trim(),
       timestamp: Date.now()
-    }
+    };
     
-    if (socket) {
-      socket.emit('chat-message', message)
-    }
-    addMessage({ ...message, type: 'user' })
-    setNewMessage('')
+    // Gửi message qua socket
+    socket.emit('chat-message', messageData);
+    
+    // Thêm message vào local state
+    setMessages(prev => [...prev, messageData]);
+    setNewMessage('');
+  }, [newMessage, socket, roomId, username]);
+  
+  const handleSourceLanguageChange = useCallback((lang) => {
+    setSourceLanguage(lang);
+  }, [setSourceLanguage]);
+  
+  const handleTargetLanguageChange = useCallback((lang) => {
+    setTargetLanguage(lang);
+  }, [setTargetLanguage]);
+  
+  const handleCaptionModeChange = useCallback((mode) => {
+    setCaptionMode(mode);
+  }, []);
+  
+  const handleMouseMove = useCallback(() => {
+    setShowControls(true);
+    if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+    controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 3000);
+  }, []);
+  
+  if (isJoining) {
+    return (
+      <div className="room-container joining">
+        <div className="joining-overlay">
+          <Loader2 className="spinner" size={48} />
+          <h2>Đang tham gia phòng...</h2>
+          <p>Room ID: <strong>{roomId}</strong></p>
+        </div>
+      </div>
+    );
   }
-
-  // ============================================
-  // DEVICE CHANGE HANDLERS
-  // ============================================
-
-  const changeAudioDevice = async (deviceId) => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { 
-          deviceId: { exact: deviceId },
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        },
-        video: false
-      })
-      
-      if (localStream) {
-        const oldTrack = localStream.getAudioTracks()[0]
-        if (oldTrack) {
-          localStream.removeTrack(oldTrack)
-          oldTrack.stop()
-        }
-        
-        const newTrack = stream.getAudioTracks()[0]
-        newTrack.enabled = isAudioEnabled
-        localStream.addTrack(newTrack)
-      }
-      setSelectedAudioDevice(deviceId)
-    } catch (error) {
-      alert('Không thể chuyển microphone.')
-    }
-  }
-
-  const changeVideoDevice = async (deviceId) => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          deviceId: { exact: deviceId },
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        },
-        audio: false
-      })
-      
-      if (localStream) {
-        const oldTrack = localStream.getVideoTracks()[0]
-        if (oldTrack) {
-          localStream.removeTrack(oldTrack)
-          oldTrack.stop()
-        }
-        
-        const newTrack = stream.getVideoTracks()[0]
-        newTrack.enabled = isVideoEnabled
-        localStream.addTrack(newTrack)
-        
-        if (localVideoRef.current && !isScreenSharing) {
-          localVideoRef.current.srcObject = localStream
-        }
-      }
-      setSelectedVideoDevice(deviceId)
-    } catch (error) {
-      alert('Không thể chuyển camera.')
-    }
-  }
-
-  // ============================================
-  // RENDER
-  // ============================================
-
-  if (!username) {
-    return null
-  }
-
+  
   return (
-    <div className="room-container">
-      {/* Connection Status */}
-      {connectionState !== 'connected' && (
-        <div className={`connection-status connection-status-${connectionState}`}>
-          {connectionState === 'connecting' && (
-            <>
-              <Loader2 className="icon-spin" size={16} />
-              <span>Đang kết nối...</span>
-            </>
-          )}
-          {connectionState === 'disconnected' && (
-            <>
-              <Loader2 className="icon-spin" size={16} />
-              <span>⚠️ Mất kết nối - Đang thử lại...</span>
-            </>
-          )}
-          {connectionState === 'failed' && (
-            <span>❌ Kết nối thất bại - Vui lòng tải lại trang</span>
-          )}
+    <div className="room-container" onMouseMove={handleMouseMove}>
+      {/* Reconnecting Banner */}
+      {reconnecting && (
+        <div className="fixed top-0 left-0 right-0 bg-yellow-600 text-white px-4 py-2 text-center z-50 flex items-center justify-center gap-2">
+          <Wifi size={20} className="animate-pulse" />
+          <span>Đang kết nối lại...</span>
         </div>
       )}
-
-      {/* Video Grid */}
-      <div className="video-grid">
-        <div className={`video-tile video-tile-local ${activeSpeaker === userId ? 'active-speaker' : ''}`}>
-          <video
-            ref={localVideoRef}
-            autoPlay
-            playsInline
-            muted
-            className="video-element"
-          />
-          {!isVideoEnabled && !isScreenSharing && (
-            <div className="video-placeholder">
-              <Users size={48} />
-              <p>{username}</p>
-            </div>
-          )}
-          <div className="video-overlay">
-            <span className="participant-name">{username} (Bạn)</span>
-            <div className="video-status-indicators">
-              {!isAudioEnabled && <MicOff size={16} className="status-indicator" />}
-              {!isVideoEnabled && <VideoOff size={16} className="status-indicator" />}
-              {isScreenSharing && <Monitor size={16} className="status-indicator status-active" />}
-            </div>
-          </div>
-        </div>
-
-        {participants.map((participant) => (
-          <div 
-            key={participant.userId}
-            className={`video-tile ${activeSpeaker === participant.userId ? 'active-speaker' : ''}`}
-          >
-            <div className="video-placeholder">
-              <Users size={48} />
-              <p>{participant.username}</p>
-            </div>
-            <div className="video-overlay">
-              <span className="participant-name">{participant.username}</span>
-              <div className="video-status-indicators">
-                {!participant.audioEnabled && <MicOff size={16} className="status-indicator" />}
-                {!participant.videoEnabled && <VideoOff size={16} className="status-indicator" />}
-              </div>
-            </div>
-          </div>
-        ))}
-
-        {participants.length === 0 && (
-          <div className="video-empty-state">
-            <Users size={64} />
-            <p>Đang chờ người khác tham gia...</p>
-            <p className="room-code">Mã phòng: <strong>{roomId}</strong></p>
-            <p className="room-hint">Chia sẻ mã này để mời người khác</p>
-          </div>
-        )}
-      </div>
-
-      {/* Captions */}
-      {captionMode !== 'off' && captions.length > 0 && (
-        <div className="captions-container">
-          {captions.slice(-3).map((caption) => (
-            <div key={caption.id} className="caption-item fade-in-up">
-              <span className="caption-username" style={{ color: caption.userColor }}>
-                [{caption.username}]
-              </span>
-              {captionMode === 'source' && (
-                <span className="caption-text">{caption.textSource}</span>
-              )}
-              {captionMode === 'target' && (
-                <span className="caption-text">{caption.textTarget || caption.textSource}</span>
-              )}
-              {captionMode === 'bilingual' && (
-                <div className="caption-bilingual">
-                  <span className="caption-text">{caption.textSource}</span>
-                  {caption.textTarget && (
-                    <>
-                      <span className="caption-arrow">→</span>
-                      <span className="caption-text caption-translated">{caption.textTarget}</span>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-          <div ref={captionEndRef} />
+      
+      {/* Error Banner */}
+      {error && (
+        <div className="error-banner">
+          <AlertCircle size={20} />
+          <span>{error}</span>
         </div>
       )}
-
-      {/* Control Bar */}
-      <div className={`control-bar ${showControls ? 'visible' : 'hidden'}`}>
-        <div className="control-group">
-          <div className="room-info-badge">
-            Room: <strong>{roomId}</strong>
-          </div>
-        </div>
-
-        <div className="control-group control-group-center">
-          <button
-            className={`control-btn ${!isAudioEnabled ? 'control-btn-danger' : ''}`}
-            onClick={toggleAudio}
-            title={isAudioEnabled ? 'Tắt mic' : 'Bật mic'}
-          >
-            {isAudioEnabled ? <Mic size={20} /> : <MicOff size={20} />}
-          </button>
-
-          <button
-            className={`control-btn ${!isVideoEnabled ? 'control-btn-danger' : ''}`}
-            onClick={toggleVideo}
-            title={isVideoEnabled ? 'Tắt camera' : 'Bật camera'}
-          >
-            {isVideoEnabled ? <Video size={20} /> : <VideoOff size={20} />}
-          </button>
-
-          <button
-            className={`control-btn ${isScreenSharing ? 'control-btn-active' : ''}`}
-            onClick={toggleScreenShare}
-            title={isScreenSharing ? 'Dừng chia sẻ' : 'Chia sẻ màn hình'}
-          >
-            {isScreenSharing ? <MonitorOff size={20} /> : <Monitor size={20} />}
-          </button>
-
-          <button
-            className={`control-btn ${translationEnabled ? 'control-btn-active' : ''}`}
-            onClick={toggleTranslation}
-            title={translationEnabled ? 'Tắt dịch' : 'Bật dịch'}
-          >
-            {translationEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
-          </button>
-
-          <button
-            className="control-btn control-btn-danger control-btn-large"
-            onClick={leaveCall}
-            title="Rời cuộc gọi"
-          >
-            <PhoneOff size={20} />
-          </button>
-        </div>
-
-        <div className="control-group">
-          <button
-            className={`control-btn ${isChatOpen ? 'control-btn-active' : ''}`}
-            onClick={() => setIsChatOpen(!isChatOpen)}
-            title="Chat"
-          >
-            <MessageSquare size={20} />
-            {unreadCount > 0 && (
-              <span className="control-badge control-badge-danger">{unreadCount}</span>
-            )}
-          </button>
-
-          <button
-            className={`control-btn ${isParticipantsOpen ? 'control-btn-active' : ''}`}
-            onClick={() => setIsParticipantsOpen(!isParticipantsOpen)}
-            title="Người tham gia"
-          >
-            <Users size={20} />
-            <span className="control-badge">{participants.length + 1}</span>
-          </button>
-
-          <button
-            className={`control-btn ${isSettingsOpen ? 'control-btn-active' : ''}`}
-            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-            title="Cài đặt"
-          >
-            <Settings size={20} />
-          </button>
-        </div>
-      </div>
-
+      
+      <VideoGrid
+        localStream={localStream}
+        remoteStreams={remoteStreams}
+        participants={participants}
+        username={username}
+        isVideoEnabled={isVideoEnabled}
+        isAudioEnabled={isAudioEnabled}
+        isScreenSharing={isScreenSharing}
+        iceConnectionState={iceConnectionState}
+        latency={latency}
+        connectionQuality={connectionQuality}
+        roomId={roomId}
+      />
+      
+      <CaptionsOverlay captions={visibleCaptions} mode={captionMode} />
+      
+      <ControlsBar
+        roomId={roomId}
+        participantCount={participants.size + 1}
+        isConnected={isConnected}
+        connectionQuality={connectionQuality}
+        isAudioEnabled={isAudioEnabled}
+        isVideoEnabled={isVideoEnabled}
+        isScreenSharing={isScreenSharing}
+        isChatOpen={isChatOpen}
+        isParticipantsOpen={isParticipantsOpen}
+        isSettingsOpen={isSettingsOpen}
+        unreadCount={unreadCount}
+        showControls={showControls}
+        onToggleAudio={handleToggleAudio}
+        onToggleVideo={handleToggleVideo}
+        onScreenShare={handleScreenShare}
+        onLeaveCall={handleLeaveCall}
+        onToggleChat={() => { setIsChatOpen(!isChatOpen); setUnreadCount(0); }}
+        onToggleParticipants={() => setIsParticipantsOpen(!isParticipantsOpen)}
+        onToggleSettings={() => setIsSettingsOpen(!isSettingsOpen)}
+      />
+      
       {/* Chat Panel */}
-      {isChatOpen && (
-        <div className="side-panel chat-panel fade-in-right">
-          <div className="panel-header">
-            <h3>
-              <MessageSquare size={20} />
-              <span>Chat</span>
-            </h3>
-            <button className="panel-close" onClick={() => setIsChatOpen(false)}>
-              <X size={20} />
-            </button>
-          </div>
-          
-          <div className="chat-messages">
-            {messages.length === 0 && (
-              <div className="chat-empty-state">
-                <MessageSquare size={48} />
-                <p>Chưa có tin nhắn</p>
-                <p className="chat-hint">Gửi tin nhắn đầu tiên!</p>
-              </div>
-            )}
-            
-            {messages.map((msg) => (
-              <div 
-                key={msg.id}
-                className={`chat-message ${msg.type === 'system' ? 'chat-message-system' : ''} ${msg.userId === userId ? 'chat-message-self' : ''}`}
-              >
-                {msg.type === 'user' && (
-                  <>
-                    <div className="chat-message-header">
-                      <strong>{msg.username}</strong>
-                      <span className="chat-time">
-                        {new Date(msg.timestamp).toLocaleTimeString('vi-VN', {
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </span>
-                    </div>
-                    <p className="chat-message-text">{msg.message}</p>
-                  </>
-                )}
-                {msg.type === 'system' && (
-                  <span className="chat-system-text">{msg.message}</span>
-                )}
-              </div>
-            ))}
-            <div ref={chatEndRef} />
-          </div>
-
-          <form className="chat-input-form" onSubmit={sendMessage}>
-            <input
-              type="text"
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              placeholder="Nhập tin nhắn..."
-              className="chat-input"
-              maxLength={500}
-            />
-            <button type="submit" className="chat-send-btn" disabled={!newMessage.trim()}>
-              <Send size={20} />
-            </button>
-          </form>
-        </div>
-      )}
-
+      <ChatPanel
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        messages={messages}
+        newMessage={newMessage}
+        setNewMessage={setNewMessage}
+        onSendMessage={handleSendMessage}
+        username={username}
+      />
+      
       {/* Participants Panel */}
-      {isParticipantsOpen && (
-        <div className="side-panel participants-panel fade-in-right">
-          <div className="panel-header">
-            <h3>
-              <Users size={20} />
-              <span>Người tham gia ({participants.length + 1})</span>
-            </h3>
-            <button className="panel-close" onClick={() => setIsParticipantsOpen(false)}>
-              <X size={20} />
-            </button>
-          </div>
-          
-          <div className="participants-list">
-            <div className="participant-item participant-self">
-              <div className="participant-avatar">
-                <Users size={20} />
-              </div>
-              <div className="participant-info">
-                <span className="participant-name-text">{username}</span>
-                <span className="participant-badge">Bạn</span>
-              </div>
-              <div className="participant-indicators">
-                {!isAudioEnabled && (
-                  <span className="indicator-badge indicator-muted">
-                    <MicOff size={14} />
-                  </span>
-                )}
-                {!isVideoEnabled && (
-                  <span className="indicator-badge indicator-no-video">
-                    <VideoOff size={14} />
-                  </span>
-                )}
-                {isScreenSharing && (
-                  <span className="indicator-badge indicator-screen">
-                    <Monitor size={14} />
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {participants.map((participant) => (
-              <div key={participant.userId} className="participant-item">
-                <div className="participant-avatar">
-                  <Users size={20} />
-                </div>
-                <div className="participant-info">
-                  <span className="participant-name-text">{participant.username}</span>
-                  {activeSpeaker === participant.userId && (
-                    <span className="participant-badge participant-speaking">Đang nói</span>
-                  )}
-                </div>
-                <div className="participant-indicators">
-                  {!participant.audioEnabled && (
-                    <span className="indicator-badge indicator-muted">
-                      <MicOff size={14} />
-                    </span>
-                  )}
-                  {!participant.videoEnabled && (
-                    <span className="indicator-badge indicator-no-video">
-                      <VideoOff size={14} />
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
+      <ParticipantsPanel
+        isOpen={isParticipantsOpen}
+        onClose={() => setIsParticipantsOpen(false)}
+        participants={participants}
+        username={username}
+        connectionStates={connectionStates}
+      />
+      
       {/* Settings Panel */}
-      {isSettingsOpen && (
-        <div className="side-panel settings-panel fade-in-right">
-          <div className="panel-header">
-            <h3>
-              <Settings size={20} />
-              <span>Cài đặt</span>
-            </h3>
-            <button className="panel-close" onClick={() => setIsSettingsOpen(false)}>
-              <X size={20} />
-            </button>
-          </div>
-          
-          <div className="settings-content">
-            {/* Device Settings */}
-            <div className="settings-section">
-              <h4>
-                <Mic size={18} />
-                <span>Thiết bị</span>
-              </h4>
-              
-              <div className="setting-item">
-                <label>Microphone</label>
-                <select
-                  value={selectedAudioDevice}
-                  onChange={(e) => changeAudioDevice(e.target.value)}
-                  className="setting-select"
-                >
-                  {audioDevices.map((device) => (
-                    <option key={device.deviceId} value={device.deviceId}>
-                      {device.label || `Microphone ${device.deviceId.slice(0, 5)}`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="setting-item">
-                <label>Camera</label>
-                <select
-                  value={selectedVideoDevice}
-                  onChange={(e) => changeVideoDevice(e.target.value)}
-                  className="setting-select"
-                >
-                  {videoDevices.map((device) => (
-                    <option key={device.deviceId} value={device.deviceId}>
-                      {device.label || `Camera ${device.deviceId.slice(0, 5)}`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {outputDevices.length > 0 && (
-                <div className="setting-item">
-                  <label>Loa</label>
-                  <select
-                    value={selectedOutputDevice}
-                    onChange={(e) => setSelectedOutputDevice(e.target.value)}
-                    className="setting-select"
-                  >
-                    {outputDevices.map((device) => (
-                      <option key={device.deviceId} value={device.deviceId}>
-                        {device.label || `Speaker ${device.deviceId.slice(0, 5)}`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-
-            {/* Translation Settings */}
-            <div className="settings-section">
-              <h4>
-                <Volume2 size={18} />
-                <span>Dịch thuật</span>
-              </h4>
-              
-              <div className="setting-item">
-                <label>Ngôn ngữ gốc (bạn nói)</label>
-                <select
-                  value={sourceLanguage}
-                  onChange={(e) => setSourceLanguage(e.target.value)}
-                  className="setting-select"
-                >
-                  <option value="vi">🇻🇳 Tiếng Việt</option>
-                  <option value="en">🇺🇸 English</option>
-                  <option value="ja">🇯🇵 日本語</option>
-                  <option value="ko">🇰🇷 한국어</option>
-                  <option value="zh">🇨🇳 中文</option>
-                  <option value="fr">🇫🇷 Français</option>
-                  <option value="de">🇩🇪 Deutsch</option>
-                  <option value="es">🇪🇸 Español</option>
-                </select>
-              </div>
-
-              <div className="setting-item">
-                <label>Ngôn ngữ dịch (bạn nghe)</label>
-                <select
-                  value={targetLanguage}
-                  onChange={(e) => setTargetLanguage(e.target.value)}
-                  className="setting-select"
-                >
-                  <option value="en">🇺🇸 English</option>
-                  <option value="vi">🇻🇳 Tiếng Việt</option>
-                  <option value="ja">🇯🇵 日本語</option>
-                  <option value="ko">🇰🇷 한국어</option>
-                  <option value="zh">🇨🇳 中文</option>
-                  <option value="fr">🇫🇷 Français</option>
-                  <option value="de">🇩🇪 Deutsch</option>
-                  <option value="es">🇪🇸 Español</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Caption Settings */}
-            <div className="settings-section">
-              <h4>
-                <MessageSquare size={18} />
-                <span>Phụ đề</span>
-              </h4>
-              
-              <div className="setting-item">
-                <label>Chế độ hiển thị</label>
-                <select
-                  value={captionMode}
-                  onChange={(e) => setCaptionMode(e.target.value)}
-                  className="setting-select"
-                >
-                  <option value="off">❌ Tắt phụ đề</option>
-                  <option value="source">📝 Chỉ ngôn ngữ gốc</option>
-                  <option value="target">🌐 Chỉ ngôn ngữ dịch</option>
-                  <option value="bilingual">🔄 Song ngữ (gốc + dịch)</option>
-                </select>
-              </div>
-
-              <div className="setting-hint">
-                <p>💡 Phụ đề tự động biến mất sau 5 giây</p>
-              </div>
-            </div>
-
-            {/* Info */}
-            <div className="settings-section settings-info">
-              <h4>ℹ️ Thông tin</h4>
-              <div className="info-grid">
-                <div className="info-item">
-                  <span className="info-label">Mã phòng:</span>
-                  <span className="info-value">{roomId}</span>
-                </div>
-                <div className="info-item">
-                  <span className="info-label">Người tham gia:</span>
-                  <span className="info-value">{participants.length + 1}</span>
-                </div>
-                <div className="info-item">
-                  <span className="info-label">Kết nối:</span>
-                  <span className={`info-value status-${connectionState}`}>
-                    {connectionState === 'connected' && '🟢 Đã kết nối'}
-                    {connectionState === 'connecting' && '🟡 Đang kết nối'}
-                    {connectionState === 'disconnected' && '🔴 Mất kết nối'}
-                    {connectionState === 'failed' && '❌ Thất bại'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <SettingsPanel
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        sourceLanguage={sourceLanguage}
+        targetLanguage={targetLanguage}
+        captionMode={captionMode}
+        onSourceLanguageChange={handleSourceLanguageChange}
+        onTargetLanguageChange={handleTargetLanguageChange}
+        onCaptionModeChange={handleCaptionModeChange}
+        iceConnectionState={iceConnectionState}
+        latency={latency}
+        participants={participants}
+      />
     </div>
-  )
+  );
 }

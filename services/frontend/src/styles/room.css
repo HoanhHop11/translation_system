@@ -1,0 +1,1116 @@
+/* ========================================
+   Google Meet Style - Room Container (BEM)
+   ======================================== */
+
+.room {
+  position: fixed;
+  inset: 0;
+  background: #202124;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.room--with-panel .room__video-content {
+  padding-right: calc(24px + 360px);
+  justify-content: flex-start;
+}
+
+.room--with-panel .room__header {
+  padding-right: calc(24px + 360px);
+}
+
+.room--with-panel .room__controls {
+  right: 360px;
+}
+
+.room--with-panel .room__captions {
+  right: 380px;
+}
+
+/* ========================================
+   Header - Top Bar (BEM)
+   ======================================== */
+
+.room__header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  z-index: 100;
+  transition: opacity 0.3s ease;
+}
+
+.room__header--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.room__info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.room__time {
+  color: #e8eaed;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.room__id-badge {
+  background: rgba(255, 255, 255, 0.12);
+  padding: 6px 12px;
+  border-radius: 8px;
+  color: #e8eaed;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.room__connection {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.room__connection--good {
+  background: rgba(15, 157, 88, 0.2);
+  color: #0f9d58;
+}
+
+.room__connection--fair {
+  background: rgba(244, 180, 0, 0.2);
+  color: #f4b400;
+}
+
+.room__connection--poor {
+  background: rgba(217, 48, 37, 0.2);
+  color: #d93025;
+}
+
+.room__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.room__icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: none;
+  color: #e8eaed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.room__icon-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  transform: scale(1.05);
+}
+
+.room__icon-btn:active {
+  transform: scale(0.95);
+}
+
+.room__icon-btn--active {
+  background: #1a73e8;
+}
+
+.room__icon-btn:focus-visible,
+.room__control-btn:focus-visible {
+  outline: 2px solid rgba(138, 180, 248, 0.9);
+  outline-offset: 2px;
+}
+
+.room__more-menu-wrapper {
+  position: relative;
+}
+
+.room__more-menu {
+  position: absolute;
+  top: 48px;
+  right: 0;
+  min-width: 220px;
+  background: rgba(32, 33, 36, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+  z-index: 250;
+}
+
+.room__more-menu button {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: #e8eaed;
+  text-align: left;
+  padding: 10px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.room__more-menu button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ========================================
+   Video Grid - Main Content (BEM)
+   ======================================== */
+
+.room__video-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 24px 120px;
+  position: relative;
+}
+
+.room__video-grid {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  gap: 16px;
+  max-width: 1600px;
+  margin: 0 auto;
+  align-content: center;
+  justify-content: center;
+}
+
+/* Grid layouts based on participant count */
+.room__video-grid--p1 {
+  grid-template-columns: minmax(400px, 800px);
+  grid-template-rows: 1fr;
+}
+
+.room__video-grid--p2 {
+  grid-template-columns: repeat(2, minmax(300px, 1fr));
+  grid-template-rows: 1fr;
+}
+
+.room__video-grid--p3 {
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  grid-template-rows: repeat(2, 1fr);
+}
+
+.room__video-grid--p3 .room__video-tile:first-child {
+  grid-column: 1 / -1;
+}
+
+.room__video-grid--p4 {
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  grid-template-rows: repeat(2, 1fr);
+}
+
+.room__video-grid--p5,
+.room__video-grid--p6 {
+  grid-template-columns: repeat(3, minmax(240px, 1fr));
+  grid-template-rows: repeat(2, 1fr);
+}
+
+.room__video-grid--p7,
+.room__video-grid--p8,
+.room__video-grid--p9 {
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  grid-auto-rows: minmax(180px, 1fr);
+}
+
+.room__video-grid--p10,
+.room__video-grid--p11,
+.room__video-grid--p12 {
+  grid-template-columns: repeat(4, minmax(200px, 1fr));
+  grid-auto-rows: minmax(160px, 1fr);
+}
+
+/* ========================================
+   Video Tile (BEM)
+   ======================================== */
+
+.room__video-tile {
+  position: relative;
+  background: #3c4043;
+  border-radius: 12px;
+  overflow: hidden;
+  aspect-ratio: 16/9;
+  min-height: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.room__video-tile--local {
+  border: 2px solid #1a73e8;
+}
+
+.room__video-tile--speaking {
+  box-shadow: 0 0 0 3px #1a73e8;
+  transition: box-shadow 0.2s ease;
+}
+
+.room__video-element {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #202124;
+}
+
+.room__video-element--mirrored {
+  transform: scaleX(-1);
+}
+
+/* Avatar fallback */
+.room__video-avatar {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.room__avatar-initials {
+  font-size: 48px;
+  font-weight: 600;
+  color: white;
+  text-transform: uppercase;
+}
+
+/* Video overlay */
+.room__video-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12px;
+  background: linear-gradient(0deg, rgba(0,0,0,0.7) 0%, transparent 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.room__video-name {
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.room__video-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.room__status-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.room__status-icon--muted {
+  background: #d93025;
+}
+
+/* ========================================
+   Controls Bar - Bottom (BEM)
+   ======================================== */
+
+.room__controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%);
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  z-index: 100;
+  transition: opacity 0.3s ease;
+}
+
+.room__controls--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.room__control-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(60, 64, 67, 0.95);
+  border: none;
+  color: #e8eaed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.room__control-btn:hover {
+  background: rgba(80, 84, 87, 0.95);
+  transform: scale(1.08);
+}
+
+.room__control-btn:active {
+  transform: scale(0.95);
+}
+
+.room__control-btn--active {
+  background: #1a73e8;
+}
+
+.room__control-btn--danger {
+  background: #d93025;
+}
+
+.room__control-btn--danger:hover {
+  background: #c5221f;
+}
+
+.room__control-btn--muted {
+  background: #d93025;
+}
+
+.room__control-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.room__control-label {
+  position: absolute;
+  bottom: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #e8eaed;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.room__control-btn:hover .room__control-label {
+  opacity: 1;
+}
+
+/* ========================================
+   Side Panels (BEM)
+   ======================================== */
+
+.room__side-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 360px;
+  background: #202124;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.3);
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+}
+
+.room__side-panel--open {
+  transform: translateX(0);
+}
+
+.room__panel-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.room__panel-title {
+  color: #e8eaed;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.room__panel-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: #e8eaed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.room__panel-close:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.room__panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 24px;
+}
+
+.room__setting-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.room__setting-label {
+  font-size: 13px;
+  text-transform: uppercase;
+  color: #9aa0a6;
+  letter-spacing: 0.05em;
+}
+
+.room__side-panel--settings select {
+  width: 100%;
+  background: rgba(60, 64, 67, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: #e8eaed;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.room__side-panel--settings select:focus {
+  outline: 2px solid rgba(138, 180, 248, 0.6);
+  border-color: transparent;
+}
+
+.room__settings-note {
+  font-size: 14px;
+  color: #9aa0a6;
+  margin-top: 8px;
+}
+
+.room__settings-note strong {
+  color: #e8eaed;
+}
+
+/* ========================================
+   Meeting Details Card (BEM)
+   ======================================== */
+
+.room__meeting-details {
+  position: absolute;
+  bottom: 130px;
+  left: 24px;
+  width: 320px;
+  background: rgba(32, 33, 36, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 12px 16px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(14px);
+  color: #e8eaed;
+  z-index: 120;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.room__meeting-details--hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+}
+
+.room__details-toggle {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.room__details-label {
+  font-size: 13px;
+  text-transform: uppercase;
+  color: #9aa0a6;
+  letter-spacing: 0.05em;
+}
+
+.room__details-code {
+  font-size: 16px;
+  font-weight: 600;
+  color: #e8eaed;
+}
+
+.room__details-icon {
+  transition: transform 0.2s ease;
+}
+
+.room__details-icon--open {
+  transform: rotate(180deg);
+}
+
+.room__details-body {
+  margin-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.room__details-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.room__details-row--inline {
+  flex-direction: row;
+  align-items: stretch;
+}
+
+.room__details-row-label {
+  font-size: 13px;
+  color: #9aa0a6;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.room__details-row-label svg {
+  color: #8ab4f8;
+}
+
+.room__details-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.room__details-value {
+  font-size: 14px;
+  color: #e8eaed;
+  flex: 1;
+}
+
+.room__details-value--truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.room__details-action {
+  background: rgba(138, 180, 248, 0.15);
+  border: 1px solid rgba(138, 180, 248, 0.4);
+  border-radius: 999px;
+  color: #e8eaed;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.room__details-action:hover {
+  background: rgba(138, 180, 248, 0.25);
+}
+
+.room__details-metric {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.room__metric-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #9aa0a6;
+  letter-spacing: 0.05em;
+}
+
+.room__metric-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #e8eaed;
+}
+
+.room__copy-feedback {
+  font-size: 12px;
+  color: #8ab4f8;
+  background: rgba(138, 180, 248, 0.15);
+  border-radius: 999px;
+  padding: 6px 12px;
+  text-align: center;
+  margin-top: 4px;
+}
+
+/* ========================================
+   Captions Overlay (BEM)
+   ======================================== */
+
+.room__captions {
+  position: absolute;
+  bottom: 120px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  z-index: 50;
+}
+
+.room__caption-bubble {
+  background: rgba(0, 0, 0, 0.85);
+  padding: 12px 16px;
+  border-radius: 8px;
+  max-width: 80%;
+  align-self: flex-start;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.room__caption-speaker {
+  color: #8ab4f8;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.room__caption-text {
+  color: #e8eaed;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.room__caption-translation {
+  color: #9aa0a6;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+/* ========================================
+   Loading & Error States (BEM)
+   ======================================== */
+
+.room__loading {
+  position: fixed;
+  inset: 0;
+  background: #202124;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  z-index: 1000;
+}
+
+.room__loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid rgba(255, 255, 255, 0.12);
+  border-top-color: #1a73e8;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.room__loading-text {
+  color: #e8eaed;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.room__error {
+  position: fixed;
+  inset: 0;
+  background: #202124;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 24px;
+  z-index: 1000;
+}
+
+.room__error-icon {
+  width: 64px;
+  height: 64px;
+  color: #d93025;
+}
+
+.room__error-title {
+  color: #e8eaed;
+  font-size: 24px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.room__error-message {
+  color: #9aa0a6;
+  font-size: 16px;
+  text-align: center;
+  max-width: 480px;
+}
+
+.room__error-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.room__btn {
+  padding: 12px 32px;
+  border-radius: 24px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.room__btn--primary {
+  background: #1a73e8;
+  color: white;
+  border: none;
+}
+
+.room__btn--primary:hover {
+  background: #1765cc;
+  box-shadow: 0 2px 8px rgba(26, 115, 232, 0.4);
+}
+
+.room__btn--secondary {
+  background: transparent;
+  color: #8ab4f8;
+  border: 1px solid #8ab4f8;
+}
+
+.room__btn--secondary:hover {
+  background: rgba(138, 180, 248, 0.12);
+}
+
+/* ========================================
+   Responsive Design
+   ======================================== */
+
+/* Large Desktop (1920px+) */
+@media (min-width: 1920px) {
+  .room__video-grid {
+    max-width: 1920px;
+    gap: 20px;
+  }
+  
+  .room__video-content {
+    padding: 90px 32px 140px;
+  }
+}
+
+/* Desktop (1366px - 1920px) */
+@media (min-width: 1366px) and (max-width: 1919px) {
+  .room__video-grid {
+    max-width: 1600px;
+    gap: 16px;
+  }
+}
+
+/* Small Desktop/Large Tablet (1024px - 1365px) */
+@media (min-width: 1024px) and (max-width: 1365px) {
+  .room__video-content {
+    padding: 80px 20px 120px;
+  }
+  
+  .room__video-grid {
+    gap: 12px;
+    max-width: 1200px;
+  }
+  
+  .room--with-panel .room__video-content {
+    padding-right: calc(20px + 320px);
+  }
+  
+  .room--with-panel .room__controls {
+    right: 320px;
+  }
+  
+  .room__side-panel {
+    width: 320px;
+  }
+}
+
+/* Tablet (768px - 1023px) */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .room__video-content {
+    padding: 72px 16px 110px;
+  }
+  
+  .room__video-grid {
+    gap: 10px;
+  }
+  
+  .room__video-grid--p3,
+  .room__video-grid--p4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .room__video-grid--p5,
+  .room__video-grid--p6,
+  .room__video-grid--p7,
+  .room__video-grid--p8,
+  .room__video-grid--p9 {
+    grid-template-columns: repeat(2, 1fr);
+    grid-auto-rows: minmax(180px, 1fr);
+  }
+  
+  .room__side-panel {
+    width: 280px;
+  }
+  
+  .room--with-panel .room__video-content {
+    padding-right: calc(16px + 280px);
+  }
+  
+  .room--with-panel .room__controls {
+    right: 280px;
+  }
+  
+  .room--with-panel .room__captions {
+    right: 296px;
+  }
+  
+  .room__meeting-details {
+    width: 280px;
+  }
+}
+
+/* Mobile (up to 767px) */
+@media (max-width: 767px) {
+  .room__header {
+    padding: 0 12px;
+    height: 56px;
+  }
+  
+  .room__info {
+    gap: 8px;
+  }
+  
+  .room__time {
+    font-size: 12px;
+  }
+  
+  .room__id-badge {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+  
+  .room__video-content {
+    padding: 60px 8px 95px;
+  }
+  
+  .room__video-grid {
+    gap: 8px;
+  }
+  
+  /* Stack all videos vertically on mobile */
+  .room__video-grid--p1 {
+    grid-template-columns: 1fr;
+  }
+  
+  .room__video-grid--p2,
+  .room__video-grid--p3,
+  .room__video-grid--p4,
+  .room__video-grid--p5,
+  .room__video-grid--p6,
+  .room__video-grid--p7,
+  .room__video-grid--p8,
+  .room__video-grid--p9 {
+    grid-template-columns: 1fr;
+    grid-auto-rows: minmax(200px, 280px);
+  }
+  
+  /* Video tiles */
+  .room__video-tile {
+    border-radius: 8px;
+  }
+  
+  .room__avatar-initials {
+    font-size: 36px;
+  }
+  
+  /* Controls */
+  .room__controls {
+    padding: 16px;
+    gap: 8px;
+  }
+  
+  .room__control-btn {
+    width: 48px;
+    height: 48px;
+  }
+  
+  .room__control-label {
+    display: none; /* Hide labels on mobile */
+  }
+  
+  /* Side panels full width on mobile */
+  .room__side-panel {
+    width: 100%;
+  }
+  
+  /* Captions */
+  .room__captions {
+    bottom: 90px;
+    left: 8px;
+    right: 8px;
+  }
+
+  /* When panel open, don't adjust video content on mobile */
+  .room--with-panel .room__video-content {
+    padding-right: 8px;
+    justify-content: center;
+  }
+
+  .room--with-panel .room__header {
+    padding-right: 12px;
+  }
+
+  .room--with-panel .room__controls {
+    right: 0;
+  }
+
+  .room--with-panel .room__captions {
+    right: 8px;
+  }
+
+  /* Meeting details */
+  .room__meeting-details {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    bottom: 110px;
+    padding: 10px 12px;
+  }
+  
+  .room__details-code {
+    font-size: 14px;
+  }
+  
+  .room__details-metric {
+    padding: 8px 10px;
+  }
+  
+  .room__metric-value {
+    font-size: 14px;
+  }
+}
+
+/* Small Mobile (up to 480px) */
+@media (max-width: 480px) {
+  .room__header {
+    height: 52px;
+  }
+  
+  .room__header-actions {
+    gap: 8px;
+  }
+  
+  .room__icon-btn {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .room__video-content {
+    padding: 56px 6px 90px;
+  }
+  
+  .room__video-grid {
+    gap: 6px;
+  }
+  
+  .room__video-grid--p2,
+  .room__video-grid--p3,
+  .room__video-grid--p4,
+  .room__video-grid--p5,
+  .room__video-grid--p6,
+  .room__video-grid--p7,
+  .room__video-grid--p8,
+  .room__video-grid--p9 {
+    grid-auto-rows: minmax(180px, 240px);
+  }
+  
+  .room__video-name {
+    font-size: 12px;
+  }
+  
+  .room__control-btn {
+    width: 44px;
+    height: 44px;
+  }
+  
+  .room__controls {
+    padding: 12px;
+    gap: 6px;
+  }
+  
+  .room__captions {
+    bottom: 85px;
+  }
+  
+  .room__caption-bubble {
+    padding: 8px 12px;
+  }
+  
+  .room__caption-text {
+    font-size: 13px;
+  }
+}

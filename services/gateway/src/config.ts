@@ -57,6 +57,11 @@ export interface Config {
     sampleRate: number;
     channels: number;
   };
+
+  // Translation Service
+  translation: {
+    url: string;
+  };
 }
 
 /**
@@ -126,12 +131,22 @@ export const config: Config = {
 
     router: {
       mediaCodecs: [
-        // Audio codecs
+        // Audio codecs - Optimized for low latency
         {
           kind: 'audio',
           mimeType: 'audio/opus',
           clockRate: 48000,
           channels: 2,
+          parameters: {
+            // Opus optimizations cho real-time translation
+            'minptime': 20,           // 20ms frame size (giảm latency ~10ms)
+            'useinbandfec': 1,        // Forward Error Correction
+            'usedtx': 0,              // Disable DTX cho continuous streaming
+            'maxaveragebitrate': 32000, // 32 kbps fullband
+            'maxplaybackrate': 48000,
+            'stereo': 1,
+            'sprop-stereo': 1
+          }
         },
         // Video codecs
         {
@@ -177,18 +192,39 @@ export const config: Config = {
     },
 
     webRtcTransport: {
-      listenInfos: [
-        {
-          protocol: 'udp',
-          ip: '0.0.0.0',
-          announcedAddress: process.env.ANNOUNCED_IP || undefined,
-        },
-        {
-          protocol: 'tcp',
-          ip: '0.0.0.0',
-          announcedAddress: process.env.ANNOUNCED_IP || undefined,
-        },
-      ],
+      listenInfos: (() => {
+        const infos = [
+          // IPv4 listeners
+          {
+            protocol: 'udp' as const,
+            ip: '0.0.0.0',
+            announcedAddress: process.env.ANNOUNCED_IP || undefined,
+          },
+          {
+            protocol: 'tcp' as const,
+            ip: '0.0.0.0',
+            announcedAddress: process.env.ANNOUNCED_IP || undefined,
+          },
+        ];
+
+        // Add IPv6 listeners nếu được enable
+        if (process.env.ENABLE_IPV6 === 'true' && process.env.ANNOUNCED_IPV6) {
+          infos.push(
+            {
+              protocol: 'udp' as const,
+              ip: '::',
+              announcedAddress: process.env.ANNOUNCED_IPV6,
+            },
+            {
+              protocol: 'tcp' as const,
+              ip: '::',
+              announcedAddress: process.env.ANNOUNCED_IPV6,
+            }
+          );
+        }
+
+        return infos;
+      })(),
       initialAvailableOutgoingBitrate: 1000000,
       maxIncomingBitrate: 15000000,
       maxOutgoingBitrate: 15000000,
@@ -205,6 +241,10 @@ export const config: Config = {
     enabled: process.env.ENABLE_AUDIO_PROCESSING === 'true',
     sampleRate: parseInt(process.env.AUDIO_SAMPLE_RATE || '48000', 10),
     channels: parseInt(process.env.AUDIO_CHANNELS || '1', 10),
+  },
+
+  translation: {
+    url: process.env.TRANSLATION_SERVICE_URL || 'http://translation:8003',
   },
 };
 
@@ -258,6 +298,16 @@ export function validateConfig(): void {
       '⚠️  WARNING: ANNOUNCED_IP chưa được set. WebRTC có thể không hoạt động đúng!\n' +
       '   Set ANNOUNCED_IP=<public-ip> trong environment variables.'
     );
+  }
+
+  // Log IPv6 configuration status
+  if (process.env.ENABLE_IPV6 === 'true') {
+    if (process.env.ANNOUNCED_IPV6) {
+      console.log('✅ IPv6 enabled: ' + process.env.ANNOUNCED_IPV6);
+      console.log('   Listening on [::] for dual-stack connectivity');
+    } else {
+      console.warn('⚠️  WARNING: ENABLE_IPV6=true nhưng ANNOUNCED_IPV6 chưa được set!');
+    }
   }
 
   // Throw ConfigurationError nếu có lỗi

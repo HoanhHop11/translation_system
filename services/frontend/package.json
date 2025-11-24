@@ -1,7 +1,7 @@
 {
   "name": "jbcalling-frontend",
-  "version": "1.0.9",
-  "description": "Frontend cho JB Calling Translation System - Complete Video Call UI",
+  "version": "1.0.33",
+  "description": "Frontend cho JB Calling Translation System - Stack-Hybrid Architecture with api.jbcalling.site",
   "private": true,
   "dependencies": {
     "react": "^18.3.1",
