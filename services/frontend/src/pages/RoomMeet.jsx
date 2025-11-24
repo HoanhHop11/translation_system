@@ -223,23 +223,33 @@ export default function RoomMeet() {
   }, [roomId, isConnected, navigate, username, userid, urlToken, urlSourceLang, urlTargetLang, sourceLanguage, targetLanguage, setSourceLanguage, setTargetLanguage, joinRoom, createRoom, leaveRoom]);
 
   useEffect(() => {
-    if (transcriptions.length === 0 || captionMode === 'off') return;
-    const latest = transcriptions[transcriptions.length - 1];
-    const captionId = `${Date.now()}-${Math.random()}`;
-    setVisibleCaptions(prev => [...prev, { ...latest, id: captionId }].slice(-3));
-    const timeout = setTimeout(() => {
-      setVisibleCaptions(prev => prev.filter(caption => caption.id !== captionId));
-    }, 5000);
-    return () => clearTimeout(timeout);
+    if (captionMode === 'off') return;
+    if (transcriptions.length === 0) return;
+
+    // Ưu tiên caption từ Gateway; fallback legacy nếu không có
+    const filtered = transcriptions
+      .filter((c) => c.source === 'gateway' ? true : !transcriptions.some(gc => gc.source === 'gateway'));
+
+    // Dedup by id
+    const seen = new Set();
+    const latest = [];
+    for (let i = filtered.length - 1; i >= 0 && latest.length < 3; i--) {
+      const cap = filtered[i];
+      if (seen.has(cap.id)) continue;
+      seen.add(cap.id);
+      latest.unshift(cap);
+    }
+    setVisibleCaptions(latest);
   }, [transcriptions, captionMode]);
 
   // Ingest gateway captions vào TranslationContext để chạy MT/TTS per-viewer
   useEffect(() => {
     if (!translationEnabled) return;
     if (transcriptions.length === 0) return;
-    const latest = transcriptions[transcriptions.length - 1];
-    if (!latest.isFinal) return;
-    ingestGatewayCaption(latest);
+    // Chỉ ingest caption từ Gateway và đã final
+    const latestGateway = [...transcriptions].reverse().find((c) => c.source === 'gateway' && c.isFinal);
+    if (!latestGateway) return;
+    ingestGatewayCaption(latestGateway);
   }, [transcriptions, translationEnabled, ingestGatewayCaption]);
 
   useEffect(() => {

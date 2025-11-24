@@ -16,6 +16,9 @@ import ENV from '../config/env';
 
 const WebRTCContext = createContext(null);
 
+// Feature flag: khi true, chỉ dùng caption từ Gateway, bỏ qua legacy transcription đẩy từ client STT
+const USE_GATEWAY_ASR = true;
+
 export const useWebRTC = () => {
   const context = useContext(WebRTCContext);
   if (!context) {
@@ -197,8 +200,11 @@ export const WebRTCProvider = ({ children }) => {
       });
     });
 
-    // Transcription (captions)
+    // Transcription (captions) - legacy; skip when using Gateway ASR
     socket.on('transcription', (data) => {
+      if (USE_GATEWAY_ASR && data?.source !== 'gateway') {
+        return;
+      }
       const { participantId: remotePId, type, text, language, timestamp, isFinal } = data;
 
       setTranscriptions(prev => [...prev, {
@@ -209,7 +215,7 @@ export const WebRTCProvider = ({ children }) => {
         language,
         timestamp,
         isFinal: isFinal ?? true,
-        source: 'legacy'
+        source: data?.source || 'legacy'
       }].slice(-10)); // Keep last 10 captions
     });
 

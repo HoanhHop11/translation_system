@@ -47,6 +47,8 @@ networks:
 volumes:
   models_cache:
     driver: local
+  tts_models:
+    driver: local
   redis_data:
     driver: local
   redis_gateway_data:
@@ -247,7 +249,7 @@ services:
       - REDIS_PORT=6379
       - STT_SERVICE_URL=http://stt:8002  # ✅ Now accessible via backend network
       - TRANSLATION_SERVICE_URL=http://translation:8005  # VinAI Translation Service
-      - TTS_SERVICE_URL=http://tts_translation02:8003
+      - TTS_SERVICE_URL=http://tts_translation02:8004  # Piper/OpenVoice (keeps port 8004)
       - ENABLE_AUDIO_PROCESSING=true
       - AUDIO_SAMPLE_RATE=48000
       - AUDIO_CHANNELS=1
@@ -516,18 +518,19 @@ services:
     logging: *default-logging
 
   tts_translation02:
-    image: jackboun11/jbcalling-tts:redis-cache
+    image: ${DOCKER_REGISTRY:-local}/jbcalling-tts-piper:latest
     networks:
       - backend
       - frontend
     environment:
-      - REDIS_HOST=redis_gateway
-      - REDIS_PORT=6379
-      - REDIS_TTL=3600
-      - TTS_MODEL=tts_models/multilingual/multi-dataset/xtts_v2
-      - TORCH_NUM_THREADS=2
+      - PIPER_MODEL_VI=/models/piper/vi_VN-vais1000-medium.onnx
+      - PIPER_CONFIG_VI=/models/piper/vi_VN-vais1000-medium.onnx.json
+      - PIPER_MODEL_EN=/models/piper/en_US-lessac-medium.onnx
+      - PIPER_CONFIG_EN=/models/piper/en_US-lessac-medium.onnx.json
+      - OPENVOICE_BASE_DIR=/models/openvoice/base
+      - OPENVOICE_TCC_DIR=/models/openvoice/tcc
     volumes:
-      - models_cache:/root/.cache/TTS
+      - tts_models:/models
     depends_on:
       - redis
     deploy:
@@ -541,11 +544,11 @@ services:
           - node.labels.instance == translation02
       resources:
         limits:
-          cpus: '1.0'
-          memory: 1.5G
+          cpus: '1.5'
+          memory: 2G
         reservations:
-          cpus: '0.5'
-          memory: 768M
+          cpus: '0.75'
+          memory: 1G
       labels:
         - "traefik.enable=true"
         - "traefik.docker.network=translation_frontend"
@@ -562,18 +565,19 @@ services:
     logging: *default-logging
 
   tts_translation03:
-    image: jackboun11/jbcalling-tts:redis-cache
+    image: ${DOCKER_REGISTRY:-local}/jbcalling-tts-piper:latest
     networks:
       - backend
       - frontend
     environment:
-      - REDIS_HOST=redis_gateway
-      - REDIS_PORT=6379
-      - REDIS_TTL=3600
-      - TTS_MODEL=tts_models/multilingual/multi-dataset/xtts_v2
-      - TORCH_NUM_THREADS=1
+      - PIPER_MODEL_VI=/models/piper/vi_VN-vais1000-medium.onnx
+      - PIPER_CONFIG_VI=/models/piper/vi_VN-vais1000-medium.onnx.json
+      - PIPER_MODEL_EN=/models/piper/en_US-lessac-medium.onnx
+      - PIPER_CONFIG_EN=/models/piper/en_US-lessac-medium.onnx.json
+      - OPENVOICE_BASE_DIR=/models/openvoice/base
+      - OPENVOICE_TCC_DIR=/models/openvoice/tcc
     volumes:
-      - models_cache:/root/.cache/TTS
+      - tts_models:/models
     depends_on:
       - redis
     deploy:
@@ -587,11 +591,11 @@ services:
           - node.labels.instance == translation03
       resources:
         limits:
-          cpus: '0.5'
-          memory: 1G
+          cpus: '1.5'
+          memory: 2G
         reservations:
-          cpus: '0.25'
-          memory: 512M
+          cpus: '0.75'
+          memory: 1G
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8004/health\")' || exit 1"]
       interval: 30s

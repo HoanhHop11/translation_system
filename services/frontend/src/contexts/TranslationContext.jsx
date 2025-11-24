@@ -53,6 +53,8 @@ export const TranslationProvider = ({ children }) => {
   const [enabled, setEnabled] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(true); // Enable TTS playback by default
   const [participantSettings, setParticipantSettings] = useState(new Map());
+  const [ttsMode, setTtsMode] = useState('generic'); // 'generic' | 'clone'
+  const [ttsReferenceId, setTtsReferenceId] = useState(null); // optional for clone mode
 
   // Global language settings
   const [myLanguage, setMyLanguage] = useState('vi'); // User's language
@@ -202,44 +204,16 @@ export const TranslationProvider = ({ children }) => {
   const normalizeCapitalization = (text) => {
     if (!text) return text;
 
-    // Danh sách tên riêng phổ biến tiếng Việt (có thể mở rộng)
-    const properNouns = new Set([
-      'hùng', 'mai', 'linh', 'anh', 'em', 'bảo', 'minh', 'hoa', 'lan',
-      'nam', 'tâm', 'đức', 'tuấn', 'hải', 'phương', 'nga', 'thu',
-      'việt', 'nam', 'hà', 'nội', 'sài', 'gòn', 'huế', 'đà', 'nẵng'
-    ]);
+    // Giữ nguyên hoa/thường gốc, chỉ đảm bảo chữ cái đầu câu viết hoa nếu đang ở dạng toàn thường
+    const trimmed = text.trim();
+    if (trimmed.length === 0) return trimmed;
 
-    // Convert to lowercase first
-    let normalized = text.toLowerCase();
+    // Nếu text đang toàn chữ hoa, trả về nguyên trạng để tránh làm sai tên riêng
+    const isAllCaps = trimmed === trimmed.toUpperCase();
+    if (isAllCaps) return trimmed;
 
-    // Split thành words để xử lý từng từ
-    let words = normalized.split(/\s+/);
-
-    // Capitalize first word
-    if (words.length > 0) {
-      words[0] = words[0].charAt(0).toUpperCase() + words[0].slice(1);
-    }
-
-    // Capitalize proper nouns và after punctuation
-    for (let i = 1; i < words.length; i++) {
-      const word = words[i];
-      const prevWord = words[i - 1];
-
-      // Capitalize sau dấu câu
-      if (prevWord && /[.!?:]$/.test(prevWord)) {
-        words[i] = word.charAt(0).toUpperCase() + word.slice(1);
-      }
-      // Capitalize tên riêng phổ biến
-      else if (properNouns.has(word.replace(/[,.!?;:]$/g, ''))) {
-        words[i] = word.charAt(0).toUpperCase() + word.slice(1);
-      }
-      // Capitalize các từ viết tắt (VD: vs, vv)
-      else if (word === 'vs' || word === 'vv') {
-        words[i] = word.toUpperCase();
-      }
-    }
-
-    return words.join(' ');
+    // Nếu không, viết hoa chữ cái đầu câu
+    return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
   };
 
   /**
@@ -732,14 +706,26 @@ export const TranslationProvider = ({ children }) => {
    * Synthesize speech với TTS service
    */
   const synthesizeSpeech = async (text, language) => {
+    const normalizedLang = (language || targetLanguage || 'en').split('-')[0];
+
+    const payload = {
+      text,
+      // Backward-compat fields
+      language: normalizedLang, // legacy field
+      engine: 'gtts', // legacy default
+      // New fields for Piper/OpenVoice
+      lang: normalizedLang,
+      mode: ttsMode || 'generic',
+    };
+
+    if (ttsReferenceId) {
+      payload.reference_id = ttsReferenceId;
+    }
+
     const response = await fetch(`${TTS_SERVICE_URL}/synthesize`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text: text,
-        language: language,
-        engine: 'gtts' // Use gTTS for speed (200-300ms)
-      })
+      body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
@@ -747,7 +733,7 @@ export const TranslationProvider = ({ children }) => {
     }
 
     const result = await response.json();
-    return result.audio_base64;
+    return result.audio_base64 || result.audio || '';
   };
 
   /**
@@ -828,12 +814,16 @@ export const TranslationProvider = ({ children }) => {
     metrics,
     participantSettings,
     ttsEnabled,
+    ttsMode,
+    ttsReferenceId,
 
     // Actions
     toggleTranslation,
     toggleTTS,
     setMyLanguage,
     setTargetLanguage,
+    setTtsMode,
+    setTtsReferenceId,
     setupParticipantTranslation,
     stopParticipantTranslation,
     clearCaptions,
