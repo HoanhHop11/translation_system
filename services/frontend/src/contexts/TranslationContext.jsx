@@ -55,10 +55,20 @@ export const TranslationProvider = ({ children }) => {
   const [participantSettings, setParticipantSettings] = useState(new Map());
   const [ttsMode, setTtsMode] = useState('generic'); // 'generic' | 'clone'
   const [ttsReferenceId, setTtsReferenceId] = useState(null); // optional for clone mode
+  const [ttsVoice, setTtsVoice] = useState('default'); // 'default' | 'male' | 'female'
 
   // Global language settings
   const [myLanguage, setMyLanguage] = useState('vi'); // User's language
   const [targetLanguage, setTargetLanguage] = useState('en'); // Translation target
+  
+  // Refs for accessing latest state in callbacks/closures
+  const myLanguageRef = useRef(myLanguage);
+  const targetLanguageRef = useRef(targetLanguage);
+  const ttsEnabledRef = useRef(ttsEnabled);
+
+  useEffect(() => { myLanguageRef.current = myLanguage; }, [myLanguage]);
+  useEffect(() => { targetLanguageRef.current = targetLanguage; }, [targetLanguage]);
+  useEffect(() => { ttsEnabledRef.current = ttsEnabled; }, [ttsEnabled]);
 
   // Captions state
   const [captions, setCaptions] = useState([]); // Array of { participantId, text, translatedText, timestamp }
@@ -79,6 +89,7 @@ export const TranslationProvider = ({ children }) => {
   // 🔥 Utterance-based STT (Offline VI) with simple RMS-VAD segmentation
   const utteranceStates = useRef(new Map()); // participantId → { chunks: Int16Array[], totalSamples, isSpeaking, lastSpeech }
   const USE_VI_UTTERANCE_MODE = true; // Toggle để route VI qua utterance endpoint
+  const USE_GATEWAY_ASR = true;
   const VAD_CONFIG = {
     rmsThreshold: 0.01,    // Normalized RMS threshold (~-40 dB)
     silenceMs: 800,        // Silence để kết thúc utterance
@@ -91,9 +102,14 @@ export const TranslationProvider = ({ children }) => {
     depth: 0,
     micWasEnabled: null
   });
+  // Deduplicate gateway captions to avoid double processing
+  const seenGatewayCaptionIds = useRef(new Set());
 
   // Detect backend translation API shape (VinAI vs NLLB)
   const translationServiceTypeRef = useRef(null); // 'vinai' | 'nllb' | 'unknown'
+  
+  // Deduplication by content (fix for duplicate events with different IDs)
+  const lastProcessedCaptionRef = useRef(new Map()); // participantId -> { text, timestamp }
 
   const { showToast } = useToast();
   const { participantId: myParticipantId, localStream } = useWebRTC(); // ✅ Access participant + local audio track for TTS-safe mode
@@ -162,9 +178,9 @@ export const TranslationProvider = ({ children }) => {
       return;
     }
 
-    // Khi dùng Gateway ASR, bỏ qua setup cho remote (giữ tùy chọn local mic)
-    if (USE_GATEWAY_ASR && participantId !== myParticipantId) {
-      console.log(`⏭️ Skipping remote STT setup for ${participantId} (Gateway ASR mode)`);
+    // Khi dùng Gateway ASR, bỏ qua setup STT cho tất cả (remote + local) để tránh double STT
+    if (USE_GATEWAY_ASR) {
+      console.log(`⏭️ Skipping STT setup for ${participantId} (Gateway ASR mode)`);
       return;
     }
 
@@ -208,9 +224,12 @@ export const TranslationProvider = ({ children }) => {
     const trimmed = text.trim();
     if (trimmed.length === 0) return trimmed;
 
-    // Nếu text đang toàn chữ hoa, trả về nguyên trạng để tránh làm sai tên riêng
+    // Nếu text đang toàn chữ hoa, chuyển về sentence case để tránh hiển thị toàn caps
     const isAllCaps = trimmed === trimmed.toUpperCase();
-    if (isAllCaps) return trimmed;
+    if (isAllCaps) {
+      const lowered = trimmed.toLowerCase();
+      return lowered.charAt(0).toUpperCase() + lowered.slice(1);
+    }
 
     // Nếu không, viết hoa chữ cái đầu câu
     return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
@@ -236,7 +255,16 @@ export const TranslationProvider = ({ children }) => {
    * Handle audio chunk từ AudioWorklet với sentence buffering
    */
   const handleAudioChunk = useCallback(async (participantId, audioChunk) => {
-    const useUtteranceMode = USE_VI_UTTERANCE_MODE && myLanguage === 'vi';
+    if (USE_GATEWAY_ASR) {
+      // Gateway chịu trách nhiệm STT, bỏ qua client STT
+      return;
+    }
+    // Access current state via refs to avoid closure staleness
+    const currentMyLanguage = myLanguageRef.current;
+    const currentTargetLanguage = targetLanguageRef.current;
+    const currentTtsEnabled = ttsEnabledRef.current;
+
+    const useUtteranceMode = USE_VI_UTTERANCE_MODE && currentMyLanguage === 'vi';
     // Utterance mode (Offline VI) với VAD segmentation
     if (useUtteranceMode) {
       await handleAudioChunkUtterance(participantId, audioChunk);
@@ -253,7 +281,8 @@ export const TranslationProvider = ({ children }) => {
         participantId,
         pcmData,
         sampleRate,
-        chunkIndex
+        chunkIndex,
+        language: currentMyLanguage
       });
 
       // Skip empty/interim chunks
@@ -308,17 +337,19 @@ export const TranslationProvider = ({ children }) => {
         const translated = await translateText(
           normalizedText,
           sourceLanguage,
-          targetLanguage
+          currentTargetLanguage
         );
 
         console.log(`🌐 Translation for ${participantId}:`, translated);
 
         // Step 3: TTS - Only play for REMOTE participants (not self)
-        if (ttsEnabled && participantId !== myParticipantId) {
-          const audioBase64 = await synthesizeSpeech(translated, targetLanguage);
+        if (currentTtsEnabled && participantId !== myParticipantId) {
+          const audioBase64 = await synthesizeSpeech(translated, currentTargetLanguage);
 
           await ttsPlaybackService.playTranslatedAudio(participantId, audioBase64, {
             immediate: true,
+            voice: ttsVoice,
+            lang: currentTargetLanguage,
             onStart: () => handleTTSAudioStart(),
             onEnd: () => handleTTSAudioEnd()
           });
@@ -367,7 +398,7 @@ export const TranslationProvider = ({ children }) => {
         errors: prev.errors + 1
       }));
     }
-  }, [targetLanguage, ttsEnabled, myParticipantId, showToast, myLanguage]);
+  }, [myParticipantId, showToast]); // Removed state deps, using refs
 
   /**
    * Simple RMS-based VAD + utterance segmentation (Offline VI)
@@ -410,12 +441,15 @@ export const TranslationProvider = ({ children }) => {
     }
 
     utteranceStates.current.set(participantId, state);
-  }, [targetLanguage, ttsEnabled, myParticipantId]);
+  }, [myParticipantId]); // Refs handled inside flushUtterance
 
   /**
    * Flush current utterance (if any) and run STT -> Translate -> Caption/TTS
    */
   const flushUtterance = useCallback(async (participantId, state, sampleRate) => {
+    const currentTargetLanguage = targetLanguageRef.current;
+    const currentTtsEnabled = ttsEnabledRef.current;
+
     if (!state || state.chunks.length === 0) {
       resetUtteranceState(participantId);
       return;
@@ -448,12 +482,15 @@ export const TranslationProvider = ({ children }) => {
       const translated = await translateText(
         normalizedText,
         sourceLanguage,
-        targetLanguage
+        currentTargetLanguage
       );
-      if (ttsEnabled && participantId !== myParticipantId) {
-        const audioBase64 = await synthesizeSpeech(translated, targetLanguage);
+
+      if (currentTtsEnabled && participantId !== myParticipantId) {
+        const audioBase64 = await synthesizeSpeech(translated, currentTargetLanguage);
         await ttsPlaybackService.playTranslatedAudio(participantId, audioBase64, {
           immediate: true,
+          voice: ttsVoice,
+          lang: currentTargetLanguage,
           onStart: () => handleTTSAudioStart(),
           onEnd: () => handleTTSAudioEnd()
         });
@@ -484,7 +521,7 @@ export const TranslationProvider = ({ children }) => {
       console.error(`❌ Utterance pipeline error for ${participantId}:`, error);
       setMetrics(prev => ({ ...prev, errors: prev.errors + 1 }));
     }
-  }, [targetLanguage, ttsEnabled, myParticipantId]);
+  }, [myParticipantId]);
 
   const resetUtteranceState = (participantId) => {
     utteranceStates.current.set(participantId, {
@@ -554,7 +591,7 @@ export const TranslationProvider = ({ children }) => {
   /**
    * Transcribe audio với STT service
    */
-  const transcribeAudio = async ({ participantId, pcmData, sampleRate, chunkIndex }) => {
+  const transcribeAudio = async ({ participantId, pcmData, sampleRate, chunkIndex, language }) => {
     const audioBase64 = pcm16ToBase64(pcmData);
 
     const response = await fetch(`${STT_SERVICE_URL}/api/v1/transcribe-stream`, {
@@ -566,7 +603,7 @@ export const TranslationProvider = ({ children }) => {
         sample_rate: sampleRate,
         channels: 1,
         format: 'pcm16',
-        language: 'auto',
+        language: language || 'auto',
         chunk_id: chunkIndex
       })
     });
@@ -614,6 +651,14 @@ export const TranslationProvider = ({ children }) => {
   const detectTranslationServiceType = async () => {
     if (translationServiceTypeRef.current) {
       return translationServiceTypeRef.current;
+    }
+
+    // Use configured type if set (skip detection)
+    const configuredType = (ENV.TRANSLATION_SERVICE_TYPE || '').toLowerCase();
+    if (configuredType && configuredType !== 'auto') {
+      console.log(`🔧 Using configured translation service type: ${configuredType}`);
+      translationServiceTypeRef.current = configuredType;
+      return configuredType;
     }
 
     try {
@@ -712,7 +757,6 @@ export const TranslationProvider = ({ children }) => {
       text,
       // Backward-compat fields
       language: normalizedLang, // legacy field
-      engine: 'gtts', // legacy default
       // New fields for Piper/OpenVoice
       lang: normalizedLang,
       mode: ttsMode || 'generic',
@@ -750,6 +794,38 @@ export const TranslationProvider = ({ children }) => {
     try {
       if (!enabled) return;
       if (!caption || !caption.text || caption.text.trim() === '') return;
+      
+      // 1. Check duplicate by ID (legacy check)
+      if (caption.id && seenGatewayCaptionIds.current.has(caption.id)) {
+        return;
+      }
+      
+      // 2. Check duplicate by Content & Time (fix for Gateway sending same text with new IDs)
+      const speakerKey = caption.speakerId || caption.participantId || 'unknown';
+      const lastCap = lastProcessedCaptionRef.current.get(speakerKey);
+      const now = Date.now();
+      const capTime = caption.timestamp || now;
+      
+      if (lastCap) {
+        const timeDiff = Math.abs(capTime - lastCap.timestamp);
+        // Nếu nội dung giống hệt và thời gian cách nhau < 2s -> coi là duplicate
+        if (lastCap.text === caption.text.trim() && timeDiff < 2000) {
+          console.log(`♻️ Duplicate caption content detected for ${caption.speakerId}: "${caption.text}" (diff: ${timeDiff}ms)`);
+          // Vẫn add ID vào set để chặn các lần sau nếu dùng ID cũ
+          if (caption.id) seenGatewayCaptionIds.current.add(caption.id);
+          return;
+        }
+      }
+
+      if (caption.id) {
+        seenGatewayCaptionIds.current.add(caption.id);
+      }
+      
+      // Update last processed
+      lastProcessedCaptionRef.current.set(speakerKey, {
+        text: caption.text.trim(),
+        timestamp: capTime
+      });
 
       const normalizedText = normalizeCapitalization(caption.text.trim());
       const sourceLanguage = caption.language || 'auto';
@@ -762,6 +838,8 @@ export const TranslationProvider = ({ children }) => {
         const audioBase64 = await synthesizeSpeech(translated, targetLanguage);
         await ttsPlaybackService.playTranslatedAudio(caption.speakerId, audioBase64, {
           immediate: true,
+          voice: ttsVoice,
+          lang: targetLanguage,
           onStart: () => handleTTSAudioStart(),
           onEnd: () => handleTTSAudioEnd()
         });
@@ -816,6 +894,7 @@ export const TranslationProvider = ({ children }) => {
     ttsEnabled,
     ttsMode,
     ttsReferenceId,
+    ttsVoice,
 
     // Actions
     toggleTranslation,
@@ -824,6 +903,7 @@ export const TranslationProvider = ({ children }) => {
     setTargetLanguage,
     setTtsMode,
     setTtsReferenceId,
+    setTtsVoice,
     setupParticipantTranslation,
     stopParticipantTranslation,
     clearCaptions,

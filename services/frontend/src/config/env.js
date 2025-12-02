@@ -27,6 +27,7 @@ export const ENV = {
   // AI Services URLs
   STT_SERVICE_URL: getEnvMulti(['REACT_APP_STT_SERVICE_URL', 'VITE_STT_SERVICE_URL'], 'http://localhost:8002'),
   TRANSLATION_SERVICE_URL: getEnvMulti(['REACT_APP_TRANSLATION_SERVICE_URL', 'VITE_TRANSLATION_SERVICE_URL'], 'http://localhost:8003'),
+  TRANSLATION_SERVICE_TYPE: getEnvMulti(['REACT_APP_TRANSLATION_SERVICE_TYPE', 'VITE_TRANSLATION_SERVICE_TYPE'], 'auto'), // 'vinai' | 'nllb' | 'auto'
   TTS_SERVICE_URL: getEnvMulti(['REACT_APP_TTS_SERVICE_URL', 'VITE_TTS_SERVICE_URL'], 'http://localhost:8004'),
 
   // TURN Server Configuration

@@ -83,6 +83,17 @@ export const WebRTCProvider = ({ children }) => {
   const [translatedAudioQueue, setTranslatedAudioQueue] = useState([]);
   const setupLocalTranslationRef = useRef(false);
 
+  // Update language settings to server when changed
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+    
+    console.log('🌐 Syncing language settings to server:', { sourceLanguage, targetLanguage });
+    socket.emit('update-language', {
+      sourceLanguage,
+      targetLanguage
+    });
+  }, [socket, isConnected, sourceLanguage, targetLanguage]);
+
   // ==========================================
   // INITIALIZE SOCKET CONNECTION
   // ==========================================
@@ -200,10 +211,11 @@ export const WebRTCProvider = ({ children }) => {
       });
     });
 
-    // Transcription (captions) - legacy; skip when using Gateway ASR
+    // Transcription (captions) - legacy; khi USE_GATEWAY_ASR=true chỉ bỏ qua nếu source rõ ràng KHÔNG phải gateway.
+    // Các event cũ không có field `source` vẫn được chấp nhận để tương thích với gateway image cũ.
     socket.on('transcription', (data) => {
-      if (USE_GATEWAY_ASR && data?.source !== 'gateway') {
-        return;
+      if (USE_GATEWAY_ASR && data?.source && data.source !== 'gateway') {
+        return; // có source nhưng không phải gateway → bỏ qua
       }
       const { participantId: remotePId, type, text, language, timestamp, isFinal } = data;
 
@@ -225,6 +237,7 @@ export const WebRTCProvider = ({ children }) => {
       setTranscriptions(prev => [...prev, {
         id: `${speakerId}-${timestamp || Date.now()}-${seq}`,
         participantId: speakerId,
+        speakerId: speakerId || undefined,
         text,
         language,
         isFinal: !!isFinal,

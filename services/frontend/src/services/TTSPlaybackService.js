@@ -96,11 +96,34 @@ class TTSPlaybackService {
    * Play AudioBuffer immediately
    */
   async playAudioBuffer(participantId, audioBuffer, options = {}) {
-    const { onStart, onEnd } = options;
+    const { onStart, onEnd, voice, lang } = options;
     
     // Create source node
     const source = this.audioContext.createBufferSource();
     source.buffer = audioBuffer;
+
+    // Điều chỉnh pitch theo voice + ngôn ngữ (gắn với model Piper hiện tại)
+    let playbackRate = 1.0;
+    const langNorm = (lang || '').toLowerCase();
+
+    if (voice === 'male' || voice === 'female') {
+      if (langNorm.startsWith('vi')) {
+        // vi_VN-vais1000-medium: base là giọng nữ
+        // - female: giữ nguyên
+        // - male: hạ pitch nhẹ để trầm hơn
+        playbackRate = voice === 'male' ? 0.9 : 1.0;
+      } else if (langNorm.startsWith('en')) {
+        // en_US-lessac-medium: base là giọng nam
+        // - male: giữ nguyên
+        // - female: tăng pitch nhẹ cho cảm giác nữ hơn
+        playbackRate = voice === 'female' ? 1.1 : 1.0;
+      } else {
+        // Ngôn ngữ/model khác (phòng xa): áp dụng mapping đối xứng nhẹ
+        playbackRate = voice === 'male' ? 0.95 : 1.05;
+      }
+    }
+
+    source.playbackRate.value = playbackRate;
     
     // Connect to gain node
     source.connect(this.gainNode);

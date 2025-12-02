@@ -11,24 +11,13 @@
 
 import React, { useState } from 'react';
 import { useTranslation } from '../../contexts/TranslationContext';
+import { useWebRTC } from '../../contexts/WebRTCContext';
 import { Languages, Volume2, X, BarChart3, Subtitles } from 'lucide-react';
 
+// Chỉ hiển thị các ngôn ngữ được STT/TTS hỗ trợ trong pipeline hiện tại
 const LANGUAGES = [
-  { code: 'auto', name: 'Auto Detect', flag: '🌐' },
   { code: 'vi', name: 'Vietnamese', flag: '🇻🇳' },
-  { code: 'en', name: 'English', flag: '🇬🇧' },
-  { code: 'zh', name: 'Chinese', flag: '🇨🇳' },
-  { code: 'ja', name: 'Japanese', flag: '🇯🇵' },
-  { code: 'ko', name: 'Korean', flag: '🇰🇷' },
-  { code: 'th', name: 'Thai', flag: '🇹🇭' },
-  { code: 'id', name: 'Indonesian', flag: '🇮🇩' },
-  { code: 'ms', name: 'Malay', flag: '🇲🇾' },
-  { code: 'fr', name: 'French', flag: '🇫🇷' },
-  { code: 'de', name: 'German', flag: '🇩🇪' },
-  { code: 'es', name: 'Spanish', flag: '🇪🇸' },
-  { code: 'pt', name: 'Portuguese', flag: '🇵🇹' },
-  { code: 'ru', name: 'Russian', flag: '🇷🇺' },
-  { code: 'ar', name: 'Arabic', flag: '🇸🇦' }
+  { code: 'en', name: 'English', flag: '🇬🇧' }
 ];
 
 const TranslationControls = ({ isOpen, onClose, captionMode, onCaptionModeChange }) => {
@@ -43,11 +32,38 @@ const TranslationControls = ({ isOpen, onClose, captionMode, onCaptionModeChange
     ttsEnabled,
     toggleTTS,
     ttsPlaybackService,
-    getStats
+    getStats,
+    ttsVoice,
+    setTtsVoice,
   } = useTranslation();
+
+  // Đồng bộ ngôn ngữ với WebRTC/Gateway để STT chọn đúng mode (VI utterance / EN streaming)
+  const {
+    setSourceLanguage,
+    setTargetLanguage: setTargetLanguageWebRTC
+  } = useWebRTC();
   
   const [volume, setVolume] = useState(ttsPlaybackService.getVolume() * 100);
   const [showStats, setShowStats] = useState(false);
+
+  const handleSwapLanguages = () => {
+    const newMyLang = targetLanguage;
+    const newTargetLang = myLanguage;
+    setMyLanguage(newMyLang);
+    setTargetLanguage(newTargetLang);
+    setSourceLanguage(newMyLang);
+    setTargetLanguageWebRTC(newTargetLang);
+  };
+
+  const handleMyLanguageChange = (value) => {
+    setMyLanguage(value);
+    setSourceLanguage(value);
+  };
+
+  const handleTargetLanguageChange = (value) => {
+    setTargetLanguage(value);
+    setTargetLanguageWebRTC(value);
+  };
   
   if (!isOpen) return null;
   
@@ -96,10 +112,10 @@ const TranslationControls = ({ isOpen, onClose, captionMode, onCaptionModeChange
               </label>
               <select
                 value={myLanguage}
-                onChange={(e) => setMyLanguage(e.target.value)}
+                onChange={(e) => handleMyLanguageChange(e.target.value)}
                 className="translation__select"
               >
-                {LANGUAGES.filter(lang => lang.code !== 'auto').map(lang => (
+                {LANGUAGES.map(lang => (
                   <option key={lang.code} value={lang.code}>
                     {lang.flag} {lang.name}
                   </option>
@@ -107,17 +123,25 @@ const TranslationControls = ({ isOpen, onClose, captionMode, onCaptionModeChange
               </select>
             </div>
             
-            {/* Target Language */}
+            {/* Target Language + Swap */}
             <div className="translation__section">
-              <label className="translation__label">
-                Dịch sang ngôn ngữ
-              </label>
+              <div className="translation__label flex items-center justify-between">
+                <span>Dịch sang ngôn ngữ</span>
+                <button
+                  type="button"
+                  onClick={handleSwapLanguages}
+                  className="px-2 py-1 text-xs rounded bg-gray-800 border border-gray-700 hover:border-gray-500"
+                  title="Đảo ngược ngôn ngữ nguồn/đích"
+                >
+                  🔄 Đảo ngược
+                </button>
+              </div>
               <select
                 value={targetLanguage}
-                onChange={(e) => setTargetLanguage(e.target.value)}
+                onChange={(e) => handleTargetLanguageChange(e.target.value)}
                 className="translation__select"
               >
-                {LANGUAGES.filter(lang => lang.code !== 'auto').map(lang => (
+                {LANGUAGES.map(lang => (
                   <option key={lang.code} value={lang.code}>
                     {lang.flag} {lang.name}
                   </option>
@@ -249,6 +273,22 @@ const TranslationControls = ({ isOpen, onClose, captionMode, onCaptionModeChange
                 />
                 <span className="translation__volume-value">{volume}%</span>
               </div>
+            </div>
+
+            {/* TTS Voice Selection */}
+            <div className="translation__section">
+              <label className="translation__label">
+                <span>Giọng nói TTS</span>
+              </label>
+              <select
+                value={ttsVoice}
+                onChange={(e) => setTtsVoice(e.target.value)}
+                className="translation__select"
+              >
+                <option value="default">Mặc định</option>
+                <option value="female">Nữ (cao hơn)</option>
+                <option value="male">Nam (trầm hơn)</option>
+              </select>
             </div>
             
             {/* Stats Toggle */}

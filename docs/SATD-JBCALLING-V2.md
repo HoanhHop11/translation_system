@@ -202,3 +202,5 @@ services:
 ### 6.3. Data Privacy
 - **Ephemeral Processing:** Audio và Text chỉ được xử lý trong RAM và bị hủy ngay sau khi phiên kết thúc. Không lưu trữ logs nội dung cuộc gọi.
 
+
+

@@ -370,13 +370,18 @@ async def transcribe_stream(req: StreamingAudioRequest):
           f"duration={duration_sec:.2f}s: '{text}'"
         )
     else:
-      # English streaming (unchanged - uses Online Recognizer)
+      # English streaming (online recognizer)
       stream = session.stream or online_en_recognizer.create_stream()
       session.stream = stream
       stream.accept_waveform(16000, processed_audio)
       online_en_recognizer.decode_stream(stream)
       result = online_en_recognizer.get_result(stream)
-      text = result.text
+
+      # sherpa-onnx có thể trả object với thuộc tính `.text` hoặc string thô
+      if hasattr(result, "text"):
+        text = result.text
+      else:
+        text = str(result or "")
       is_final = (
         online_en_recognizer.is_endpoint(stream)
         if ENGLISH_MODEL.enable_endpoint

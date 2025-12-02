@@ -132,6 +132,9 @@ export interface ClientToServerEvents {
   
   // Chat events
   'chat-message': (data: { sender: string; text: string; timestamp?: number }) => void;
+
+  // Language update (for STT/translation preferences)
+  'update-language': (data: { sourceLanguage?: string; targetLanguage?: string }) => void;
   
   // Screen share events
   'screen-share-started': (data: { roomId: string }) => void;
@@ -289,4 +292,5 @@ export interface AudioStreamBuffer {
   consumer?: Consumer;
   decoder?: any;
   udpPort?: number;
+  language?: string;
 }

@@ -117,6 +117,9 @@ export class SignalingServer {
       socket.on('screen-share-started', (data) => this.handleScreenShareStarted(socket, data));
       socket.on('screen-share-stopped', (data) => this.handleScreenShareStopped(socket, data));
 
+      // Language update (for STT/translation preferences)
+      socket.on('update-language', (data) => this.handleUpdateLanguage(socket, data));
+
       // Disconnect handling
       socket.on('disconnect', () => this.handleDisconnect(socket));
     });
@@ -485,6 +488,7 @@ export class SignalingServer {
       if (!room) {
         throw new Error('Room not found for producer');
       }
+      const participant = room.participants.get(participantId);
 
       // Create producer
       const producer = await this.roomManager.createProducer(
@@ -497,7 +501,13 @@ export class SignalingServer {
 
       // Start audio streaming to STT nếu là audio producer
       if (data.kind === 'audio') {
-        await this.audioProcessor.startStreaming(roomId, participantId, producer, room.router);
+        await this.audioProcessor.startStreaming(
+          roomId,
+          participantId,
+          producer,
+          room.router,
+          participant?.sourceLanguage
+        );
       }
 
       // Notify other participants về new producer (để họ consume)
@@ -962,5 +972,35 @@ export class SignalingServer {
    */
   getIO(): SocketIOServer {
     return this.io;
+  }
+
+  /**
+   * Handle language update from client
+   */
+  private handleUpdateLanguage(socket: Socket, data: { sourceLanguage?: string; targetLanguage?: string }): void {
+    const mapping = this.socketToParticipant.get(socket.id);
+    if (!mapping) {
+      return;
+    }
+    const { roomId, participantId } = mapping;
+    const room = this.roomManager.getRoom(roomId);
+    if (!room) {
+      return;
+    }
+    const participant = room.participants.get(participantId);
+    if (participant) {
+      if (data.sourceLanguage) participant.sourceLanguage = data.sourceLanguage;
+      if (data.targetLanguage) participant.targetLanguage = data.targetLanguage;
+    }
+
+    if (data.sourceLanguage) {
+      this.audioProcessor.updateStreamLanguage(participantId, data.sourceLanguage);
+    }
+
+    logger.info('🌐 Language updated', {
+      participantId,
+      sourceLanguage: data.sourceLanguage,
+      targetLanguage: data.targetLanguage,
+    });
   }
 }

@@ -1,38 +1,14 @@
 import React from 'react';
-import { X, Globe, Subtitles, Wifi, Clock, Users } from 'lucide-react';
+import { X, Wifi, Clock, Users } from 'lucide-react';
 
 const SettingsPanel = ({
   isOpen,
   onClose,
-  sourceLanguage,
-  targetLanguage,
-  captionMode,
-  onSourceLanguageChange,
-  onTargetLanguageChange,
-  onCaptionModeChange,
   iceConnectionState,
   latency,
   participants
 }) => {
   if (!isOpen) return null;
-
-  const languageOptions = [
-    { code: 'vi', name: 'Tiếng Việt', flag: '🇻🇳' },
-    { code: 'en', name: 'English', flag: '🇬🇧' },
-    { code: 'zh', name: '中文', flag: '🇨🇳' },
-    { code: 'ja', name: '日本語', flag: '🇯🇵' },
-    { code: 'ko', name: '한국어', flag: '🇰🇷' },
-    { code: 'fr', name: 'Français', flag: '🇫🇷' },
-    { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
-    { code: 'es', name: 'Español', flag: '🇪🇸' }
-  ];
-
-  const captionModes = [
-    { value: 'off', label: 'Tắt phụ đề', icon: '🚫' },
-    { value: 'source', label: 'Chỉ ngôn ngữ gốc', icon: '🗣️' },
-    { value: 'target', label: 'Chỉ ngôn ngữ đích', icon: '🎯' },
-    { value: 'bilingual', label: 'Song ngữ', icon: '🌐' }
-  ];
 
   const getConnectionStatusColor = (state) => {
     switch (state) {
@@ -71,56 +47,6 @@ const SettingsPanel = ({
       </div>
 
       <div className="flex-1 p-4 space-y-6 overflow-y-auto">
-        {/* Language Settings */}
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <Globe size={20} className="text-blue-500" />
-            <h4 className="text-white font-semibold">Cài đặt Ngôn ngữ</h4>
-          </div>
-
-          {/* Source Language */}
-          <div className="mb-4">
-            <label className="block text-sm text-gray-400 mb-2">
-              Ngôn ngữ của bạn
-            </label>
-            <select
-              value={sourceLanguage}
-              onChange={(e) => onSourceLanguageChange(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:border-blue-500 transition-colors"
-            >
-              {languageOptions.map((lang) => (
-                <option key={lang.code} value={lang.code}>
-                  {lang.flag} {lang.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Target Language */}
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">
-              Ngôn ngữ muốn dịch sang
-            </label>
-            <select
-              value={targetLanguage}
-              onChange={(e) => onTargetLanguageChange(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:border-blue-500 transition-colors"
-            >
-              {languageOptions.map((lang) => (
-                <option key={lang.code} value={lang.code}>
-                  {lang.flag} {lang.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {sourceLanguage === targetLanguage && (
-            <div className="mt-2 p-2 bg-yellow-900/30 border border-yellow-700 rounded text-xs text-yellow-400">
-              ⚠️ Ngôn ngữ gốc và đích giống nhau
-            </div>
-          )}
-        </div>
-
         {/* Connection Info */}
         <div>
           <div className="flex items-center gap-2 mb-3">
@@ -167,14 +93,11 @@ const SettingsPanel = ({
             <div className="flex items-center gap-2 mb-3">
               <span className="text-sm text-gray-500">🔧 Debug Info</span>
             </div>
-            <div className="bg-gray-800 rounded-lg p-3 text-xs text-gray-400 space-y-1 font-mono">
-              <div>Source: {sourceLanguage}</div>
-              <div>Target: {targetLanguage}</div>
-              <div>Caption: {captionMode}</div>
-              <div>ICE: {iceConnectionState || 'new'}</div>
-              <div>Latency: {latency || 0}ms</div>
-              <div>Peers: {participants.size}</div>
-            </div>
+          <div className="bg-gray-800 rounded-lg p-3 text-xs text-gray-400 space-y-1 font-mono">
+            <div>ICE: {iceConnectionState || 'new'}</div>
+            <div>Latency: {latency || 0}ms</div>
+            <div>Peers: {participants.size}</div>
+          </div>
           </div>
         )}
       </div>

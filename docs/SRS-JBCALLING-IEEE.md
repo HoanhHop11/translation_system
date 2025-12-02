@@ -182,3 +182,5 @@ Do hệ thống hoạt động Realtime trên CPU, các chỉ số sau là bắt
 4.  **MT En-Vi:** `vinai/vinai-translate-en2vi-v2` (CTranslate2 INT8).
 5.  **TTS:** `vi_VN-vais1000-medium` (ONNX).
 
+
+

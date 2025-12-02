@@ -194,6 +194,17 @@ Port 8004 giữ nguyên → Gateway/API không cần đổi host/port, chỉ th�
 
 ## 7. Pre-deployment: Model Download & Preparation
 
+⚠️ **QUAN TRỌNG**: Phải tải và chuẩn bị model trước khi build image hoặc deploy service!
+
+### 7.0 Quick Start Checklist
+
+- [ ] **Step 1**: Tải Piper models (VI + EN) - ~130MB total
+- [ ] **Step 2**: (Optional) Tải/convert OpenVoice v2 cho voice cloning - ~500MB (có thể bỏ qua cho MVP)
+- [ ] **Step 3**: Package models vào tarball hoặc copy vào Docker build context
+- [ ] **Step 4**: Build Docker image `jbcalling-tts-piper`
+- [ ] **Step 5**: Push image lên Docker Registry
+- [ ] **Step 6**: Deploy stack hoặc update service
+
 ### 7.1 Download Piper Models (Direct Links)
 
 **Vietnamese Model:**
@@ -326,7 +337,7 @@ curl -X POST http://localhost:8004/synthesize-clone \
   --output test_en_clone.wav
 ```
 
-### 7.2 Swarm + E2E với Gateway
+### 8.2 Swarm + E2E với Gateway
 
 - Deploy: `docker stack deploy -c infrastructure/swarm/stack-hybrid.yml translation`
 - Check: `docker service ls | grep tts`, `docker service logs -f translation_tts-piper`
@@ -334,3 +345,194 @@ curl -X POST http://localhost:8004/synthesize-clone \
   - `tts_lang` theo ngôn ngữ sau MT.
   - Test `mode=generic`, sau đó `mode=clone` để kiểm tra voice cloning đa ngôn ngữ.
 - Theo dõi CPU/RAM trên translation02/03; nếu cao, tăng limit RAM lên 2.5–3 GB hoặc giảm replicas để đo lại.
+
+## 9. Deployment Workflow (Step-by-step)
+
+### 9.1 Tải Models trên translation02 (đang SSH)
+
+```bash
+# Step 1: Tạo thư mục và tải Piper models
+mkdir -p /tmp/tts-models/piper
+cd /tmp/tts-models/piper
+
+# Vietnamese model (~63MB)
+wget -O vi_VN-vais1000-medium.onnx \
+  "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/vi/vi_VN/vais1000/medium/vi_VN-vais1000-medium.onnx"
+
+wget -O vi_VN-vais1000-medium.onnx.json \
+  "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/vi/vi_VN/vais1000/medium/vi_VN-vais1000-medium.onnx.json"
+
+# English model (~63MB)
+wget -O en_US-lessac-medium.onnx \
+  "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx"
+
+wget -O en_US-lessac-medium.onnx.json \
+  "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json"
+
+# Step 2: Verify downloads
+ls -lh /tmp/tts-models/piper/
+# Expected: 4 files, ~130MB total
+
+# Step 3: (Optional MVP) Bỏ qua OpenVoice cho deployment đầu tiên
+# Chỉ test với mode=generic, sau đó bổ sung voice cloning
+```
+
+### 9.2 Build và Push Image
+
+⚠️ **LƯU Ý**: Cần tạo service `services/tts-piper` với Dockerfile và main.py trước!
+
+```bash
+# Step 4: Copy models vào build context (nếu dùng COPY trong Dockerfile)
+cd /home/hopboy2003/jbcalling_translation_realtime
+mkdir -p services/tts-piper/models/piper
+cp /tmp/tts-models/piper/* services/tts-piper/models/piper/
+
+# Step 5: Build image
+docker build -t jackboun11/jbcalling-tts-piper:1.0.0-piper-only \
+  services/tts-piper
+
+# Step 6: Push to Docker Hub
+docker push jackboun11/jbcalling-tts-piper:1.0.0-piper-only
+
+# Tag as latest
+docker tag jackboun11/jbcalling-tts-piper:1.0.0-piper-only \
+  jackboun11/jbcalling-tts-piper:latest
+docker push jackboun11/jbcalling-tts-piper:latest
+```
+
+### 9.3 Deploy Stack
+
+```bash
+# Step 7: Copy stack file sang Manager Node
+gcloud compute scp \
+  /home/hopboy2003/jbcalling_translation_realtime/infrastructure/swarm/stack-hybrid.yml \
+  hopboy2003@translation01:/tmp/stack-hybrid.yml \
+  --zone=asia-southeast1-a
+
+# Step 8: Deploy trên Manager Node
+gcloud compute ssh translation01 --zone=asia-southeast1-a \
+  --command="docker stack deploy -c /tmp/stack-hybrid.yml translation"
+
+# Step 9: Verify deployment
+gcloud compute ssh translation01 --zone=asia-southeast1-a \
+  --command="docker service ls | grep tts"
+
+# Expected output:
+# translation_tts_translation02  1/1  jackboun11/jbcalling-tts-piper:latest
+# translation_tts_translation03  1/1  jackboun11/jbcalling-tts-piper:latest
+```
+
+### 9.4 Health Check & Testing
+
+```bash
+# Step 10: Check service logs
+gcloud compute ssh translation01 --zone=asia-southeast1-a \
+  --command="docker service logs translation_tts_translation02 --tail 20"
+
+# Step 11: Test health endpoint
+curl -s https://tts.jbcalling.site/health | python3 -m json.tool
+
+# Expected response:
+# {
+#   "status": "healthy",
+#   "engine": "piper",
+#   "languages": ["vi", "en"],
+#   "modes": ["generic"]
+# }
+
+# Step 12: Test TTS endpoint (Vietnamese)
+curl -X POST https://tts.jbcalling.site/synthesize \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Xin chào, đây là kiểm thử tiếng Việt.",
+    "lang": "vi",
+    "mode": "generic"
+  }' \
+  --output /tmp/test_vi.wav
+
+# Step 13: Test TTS endpoint (English)
+curl -X POST https://tts.jbcalling.site/synthesize \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Hello, this is an English TTS test.",
+    "lang": "en",
+    "mode": "generic"
+  }' \
+  --output /tmp/test_en.wav
+
+# Step 14: Play audio để verify
+# aplay /tmp/test_vi.wav (Linux)
+# afplay /tmp/test_vi.wav (Mac)
+```
+
+## 10. Troubleshooting Common Issues
+
+### 10.1 Model không tải được
+
+**Lỗi**: `FileNotFoundError: /models/piper/vi_VN-vais1000-medium.onnx`
+
+**Giải pháp**:
+- Kiểm tra models đã copy vào build context chưa
+- Verify Dockerfile có bước `COPY models/ /models/` hoặc `RUN wget ...`
+- Check volume mount trong stack: `tts_models:/models`
+
+### 10.2 Service không start
+
+**Lỗi**: `Health check failed` hoặc service restart liên tục
+
+**Giải pháp**:
+```bash
+# Check logs chi tiết
+docker service logs translation_tts_translation02 --tail 50
+
+# Common issues:
+# 1. Model path sai → Check env vars PIPER_MODEL_VI/EN
+# 2. Port 8004 conflict → Check stack ports mapping
+# 3. Out of memory → Tăng memory limit lên 2.5G
+```
+
+### 10.3 TTS không trả về audio
+
+**Lỗi**: Response 500 hoặc empty audio
+
+**Giải pháp**:
+- Check payload format: `{"text": "...", "lang": "vi", "mode": "generic"}`
+- Verify backward-compat: payload cũ `{"text": "...", "language": "vi"}` vẫn hoạt động
+- Check logs: `UnicodeDecodeError` → text encoding issue
+- Model inference error → verify ONNX runtime installed
+
+### 10.4 OpenVoice không hoạt động (khi bật voice cloning)
+
+**Lỗi**: `mode=clone` trả về 500 hoặc giọng không khớp reference
+
+**Giải pháp**:
+- Verify OpenVoice IR models đã convert và mount đúng
+- Check reference_audio format: WAV, 16kHz, mono
+- Reference audio quá ngắn (<3s) hoặc quá dài (>30s) → clip về 5-10s
+- CPU quá chậm → tăng timeout hoặc dùng mode=generic trước
+
+## 11. Roadmap & Future Enhancements
+
+### Phase 1 (Current - MVP): Piper Generic TTS
+- ✅ Piper VI + EN models
+- ✅ API backward-compatible
+- ✅ Port 8004 giữ nguyên
+- ✅ mode=generic working
+
+### Phase 2: OpenVoice Voice Cloning
+- [ ] Convert OpenVoice v2 sang OpenVINO IR
+- [ ] Integrate TCC pipeline
+- [ ] mode=clone working
+- [ ] Reference audio storage/cache
+
+### Phase 3: Quality & Performance
+- [ ] Model quantization (INT8)
+- [ ] Streaming TTS (chunked output)
+- [ ] Prosody/emotion control
+- [ ] Multi-voice support (libritts-high)
+
+### Phase 4: Advanced Features
+- [ ] Real-time voice conversion (Piper + TCC trong <200ms)
+- [ ] Voice library management
+- [ ] A/B testing Piper vs XTTS quality
+- [ ] Auto language detection

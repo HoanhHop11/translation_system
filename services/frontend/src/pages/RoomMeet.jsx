@@ -12,6 +12,8 @@ import ParticipantsPanel from '../components/room/ParticipantsPanel';
 import SettingsPanel from '../components/room/SettingsPanel';
 import TranslationControls from '../components/room/TranslationControls';
 
+const USE_GATEWAY_ASR = true;
+
 // Helper function để decode Base64 có tiếng Việt
 const decodeData = (encodedString) => {
   try {
@@ -83,7 +85,7 @@ export default function RoomMeet() {
   const [showControls, setShowControls] = useState(true);
   const [isJoining, setIsJoining] = useState(true);
   const [error, setError] = useState(null);
-  const [captionMode, setCaptionMode] = useState('bilingual');
+  const [captionMode, setCaptionMode] = useState('off'); // default: captions off on join
   const [visibleCaptions, setVisibleCaptions] = useState([]);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -105,6 +107,7 @@ export default function RoomMeet() {
 
   const controlsTimeoutRef = useRef(null);
   const hasJoinedRef = useRef(false);
+  const processedCaptionIds = useRef(new Set()); // Deduplication for gateway captions
 
   // Memoize participant list for VideoGrid
   const participantList = useMemo(() => {
@@ -246,9 +249,28 @@ export default function RoomMeet() {
   useEffect(() => {
     if (!translationEnabled) return;
     if (transcriptions.length === 0) return;
-    // Chỉ ingest caption từ Gateway và đã final
-    const latestGateway = [...transcriptions].reverse().find((c) => c.source === 'gateway' && c.isFinal);
+
+    // Ưu tiên ingest caption từ Gateway đã final; nếu chưa có final (EN streaming/noisy env)
+    // thì fallback sang caption Gateway gần nhất có text khác rỗng.
+    const reversed = [...transcriptions].reverse();
+    const latestGatewayFinal = reversed.find((c) => c.source === 'gateway' && c.isFinal);
+    const latestGateway =
+      latestGatewayFinal ||
+      reversed.find((c) => c.source === 'gateway' && c.text && c.text.trim().length > 0);
     if (!latestGateway) return;
+
+    // Prevent duplicate ingestion (spamming TTS)
+    if (processedCaptionIds.current.has(latestGateway.id)) {
+      return;
+    }
+    processedCaptionIds.current.add(latestGateway.id);
+
+    // Optional: Limit set size to prevent memory leak over long calls
+    if (processedCaptionIds.current.size > 200) {
+      processedCaptionIds.current = new Set([...processedCaptionIds.current].slice(-100));
+    }
+
+    console.log('📥 Ingesting Gateway Caption:', latestGateway);
     ingestGatewayCaption(latestGateway);
   }, [transcriptions, translationEnabled, ingestGatewayCaption]);
 
@@ -369,6 +391,7 @@ export default function RoomMeet() {
   // 🔥 NEW: Setup translation for local and remote streams
   useEffect(() => {
     if (!translationEnabled) return;
+    if (USE_GATEWAY_ASR) return; // Gateway đã cung cấp caption, bỏ STT client
 
     // 1. Setup local translation
     if (localStream && participantId && !participantSettings.has(participantId)) {
@@ -510,8 +533,6 @@ export default function RoomMeet() {
     setNewMessage('');
   }, [newMessage, socket, roomId, username]);
 
-  const handleSourceLanguageChange = useCallback((lang) => setSourceLanguage(lang), [setSourceLanguage]);
-  const handleTargetLanguageChange = useCallback((lang) => setTargetLanguage(lang), [setTargetLanguage]);
   const handleCaptionModeChange = useCallback((mode) => setCaptionMode(mode), []);
 
   const handleMouseMove = useCallback(() => {
@@ -671,10 +692,6 @@ export default function RoomMeet() {
       <SettingsPanel
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
-        sourceLanguage={sourceLanguage}
-        targetLanguage={targetLanguage}
-        onSourceLanguageChange={handleSourceLanguageChange}
-        onTargetLanguageChange={handleTargetLanguageChange}
         iceConnectionState={iceConnectionState}
         latency={latency}
         participants={participants}

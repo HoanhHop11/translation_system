@@ -67,7 +67,7 @@ export class AudioProcessor extends EventEmitter {
   /**
    * Start streaming audio từ producer (TỰ ĐỘNG, KHÔNG CẦN USER BẤM NÚT)
    */
-  async startStreaming(roomId: string, participantId: string, producer: Producer, router: Router): Promise<void> {
+  async startStreaming(roomId: string, participantId: string, producer: Producer, router: Router, language?: string): Promise<void> {
     try {
       if (producer.kind !== 'audio') {
         logger.warn('Producer is not audio, skipping streaming', { producerId: producer.id });
@@ -124,6 +124,7 @@ export class AudioProcessor extends EventEmitter {
         consumer,
         decoder,
         udpPort: rtpPort,
+        language,
       };
 
       // Lưu UDP socket ngoài type chuẩn
@@ -148,6 +149,17 @@ export class AudioProcessor extends EventEmitter {
     } catch (error) {
       logger.error('Error starting audio streaming:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Update language for active stream (called when participant updates preference)
+   */
+  updateStreamLanguage(participantId: string, language: string): void {
+    const streamBuffer = this.activeStreams.get(participantId);
+    if (streamBuffer) {
+      streamBuffer.language = language;
+      logger.info('🌐 Updated stream language', { participantId, language });
     }
   }
 
@@ -330,6 +342,8 @@ export class AudioProcessor extends EventEmitter {
   private async streamToSTT(participantId: string, audioData: Buffer, roomId: string): Promise<void> {
     try {
       const startTime = Date.now();
+      const streamBuffer = this.activeStreams.get(participantId);
+      const language = streamBuffer?.language || 'vi';
 
       // Gửi audio chunk đến STT service
       const response = await axios.post(
@@ -340,6 +354,7 @@ export class AudioProcessor extends EventEmitter {
           sample_rate: this.OUTPUT_SAMPLE_RATE,
           channels: this.CHANNELS,
           format: 'pcm16', // hoặc 'opus' nếu không decode
+          language,
         },
         {
           timeout: 5000, // 5s timeout cho low-latency
@@ -352,6 +367,15 @@ export class AudioProcessor extends EventEmitter {
       const latency = Date.now() - startTime;
 
       // Handle transcription result
+      if (response.data) {
+        logger.debug('STT raw response', {
+          participantId,
+          roomId,
+          language,
+          data: response.data,
+        });
+      }
+
       if (response.data && response.data.text) {
         const transcription = {
           roomId,
