@@ -34,7 +34,7 @@ export class SignalingServer {
   private roomManager: RoomManager;
   private audioProcessor: AudioProcessor;
   private captionSeq: Map<string, Map<string, number>> = new Map();
-  
+
   // Track socket -> participant mapping
   private socketToParticipant: Map<string, { roomId: string; participantId: string }> = new Map();
 
@@ -56,7 +56,7 @@ export class SignalingServer {
     const corsOrigins = process.env.CORS_ORIGIN
       ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
       : '*';
-    
+
     this.io = new SocketIOServer(httpServer, {
       cors: {
         origin: corsOrigins,
@@ -109,6 +109,8 @@ export class SignalingServer {
       socket.on('resume-consumer', (data, callback) => this.handleResumeConsumer(socket, data, callback));
       socket.on('pause-consumer', (data, callback) => this.handlePauseConsumer(socket, data, callback));
       socket.on('close-producer', (data, callback) => this.handleCloseProducer(socket, data, callback));
+      socket.on('pause-producer', (data, callback) => this.handlePauseProducer(socket, data, callback));
+      socket.on('resume-producer', (data, callback) => this.handleResumeProducer(socket, data, callback));
 
       // Chat events
       socket.on('chat-message', (data) => this.handleChatMessage(socket, data));
@@ -162,12 +164,12 @@ export class SignalingServer {
    */
   private async handleJoinRoom(
     socket: Socket,
-    data: { 
-      roomId: string; 
-      name: string; 
+    data: {
+      roomId: string;
+      name: string;
       userid?: string;
       token?: string;
-      sourceLanguage?: string; 
+      sourceLanguage?: string;
       targetLanguage?: string;
     },
     callback: (response: any) => void
@@ -205,26 +207,26 @@ export class SignalingServer {
         // Check nếu decode thành công và có format hợp lệ
         if (decoded && decoded.length > 0 && decoded.includes('_')) {
           actualRoomId = decoded;
-          logger.info('Room ID đã được decode từ Base64', { 
-            encoded: roomId, 
-            decoded: actualRoomId 
+          logger.info('Room ID đã được decode từ Base64', {
+            encoded: roomId,
+            decoded: actualRoomId
           });
         }
       } catch (e) {
         // Nếu không phải Base64, giữ nguyên roomId
         actualRoomId = roomId;
       }
-      
+
       // Check if room exists, nếu không tồn tại thì tự động tạo (cho external integration)
       let room = this.roomManager.getRoom(actualRoomId);
       if (!room) {
         logger.info('Room không tồn tại, tự động tạo mới', { roomId: actualRoomId });
-        
+
         // Tạo router cho room mới
         const router = await this.workerManager.createRouter();
         await this.roomManager.createRoom(actualRoomId, router);
         room = this.roomManager.getRoom(actualRoomId);
-        
+
         if (!room) {
           return callback({
             success: false,
@@ -241,7 +243,7 @@ export class SignalingServer {
 
       // Add participant to room (với userid từ external system)
       await this.roomManager.addParticipant(actualRoomId, participantId, socket.id, name, sourceLanguage, targetLanguage);
-      
+
       // Lưu userid vào participant metadata (nếu có)
       if (userid && room) {
         const participant = room.participants.get(participantId);
@@ -264,6 +266,8 @@ export class SignalingServer {
             id: p.id,
             name: p.name,
             joinedAt: p.joinedAt,
+            sourceLanguage: p.sourceLanguage,
+            targetLanguage: p.targetLanguage,
             producers: Array.from(p.producers.values()).map((producer) => ({
               id: producer.id,
               kind: producer.kind,
@@ -277,6 +281,8 @@ export class SignalingServer {
         id: participantId,
         name,
         joinedAt: Date.now(),
+        sourceLanguage,
+        targetLanguage,
         producers: [],
       });
 
@@ -322,6 +328,15 @@ export class SignalingServer {
       }
 
       const { roomId, participantId } = mapping;
+
+      // 🔥 CRITICAL: Stop audio streaming BEFORE removing participant
+      // This releases PlainTransport UDP ports
+      try {
+        await this.audioProcessor.stopStreaming(participantId);
+        logger.info('Audio streaming stopped for leaving participant', { participantId });
+      } catch (audioErr) {
+        logger.warn('Error stopping audio streaming on leave:', { participantId, error: audioErr });
+      }
 
       // Remove participant from room
       await this.roomManager.removeParticipant(roomId, participantId);
@@ -446,8 +461,8 @@ export class SignalingServer {
         participant.sendTransport?.id === data.transportId
           ? participant.sendTransport
           : participant.recvTransport?.id === data.transportId
-          ? participant.recvTransport
-          : null;
+            ? participant.recvTransport
+            : null;
 
       if (!transport) {
         throw new Error('Transport not found');
@@ -717,6 +732,100 @@ export class SignalingServer {
   }
 
   /**
+   * Handle pause producer (khi user mute mic)
+   */
+  private async handlePauseProducer(
+    socket: Socket,
+    data: { producerId: string },
+    callback: (response?: { error?: { message: string } }) => void
+  ): Promise<void> {
+    try {
+      const mapping = this.socketToParticipant.get(socket.id);
+      if (!mapping) {
+        throw new Error('Participant not in room');
+      }
+
+      const { roomId, participantId } = mapping;
+      const room = this.roomManager.getRoom(roomId);
+      if (!room) {
+        throw new Error('Room not found');
+      }
+
+      const participant = room.participants.get(participantId);
+      if (!participant) {
+        throw new Error('Participant not found');
+      }
+
+      const producer = participant.producers.get(data.producerId);
+      if (!producer) {
+        throw new Error('Producer not found');
+      }
+
+      // Pause producer trên MediaSoup
+      await producer.pause();
+
+      // Pause audio streaming tới STT nếu là audio producer
+      if (producer.kind === 'audio') {
+        this.audioProcessor.pauseStreaming(participantId);
+      }
+
+      logger.info('🔇 Producer paused (mic muted)', { producerId: data.producerId, participantId });
+
+      callback();
+    } catch (error) {
+      logger.error('Error pausing producer:', error);
+      callback({ error: { message: (error as Error).message } });
+    }
+  }
+
+  /**
+   * Handle resume producer (khi user unmute mic)
+   */
+  private async handleResumeProducer(
+    socket: Socket,
+    data: { producerId: string },
+    callback: (response?: { error?: { message: string } }) => void
+  ): Promise<void> {
+    try {
+      const mapping = this.socketToParticipant.get(socket.id);
+      if (!mapping) {
+        throw new Error('Participant not in room');
+      }
+
+      const { roomId, participantId } = mapping;
+      const room = this.roomManager.getRoom(roomId);
+      if (!room) {
+        throw new Error('Room not found');
+      }
+
+      const participant = room.participants.get(participantId);
+      if (!participant) {
+        throw new Error('Participant not found');
+      }
+
+      const producer = participant.producers.get(data.producerId);
+      if (!producer) {
+        throw new Error('Producer not found');
+      }
+
+      // Resume producer trên MediaSoup
+      await producer.resume();
+
+      // Resume audio streaming tới STT nếu là audio producer
+      if (producer.kind === 'audio') {
+        this.audioProcessor.resumeStreaming(participantId);
+      }
+
+      logger.info('🔊 Producer resumed (mic unmuted)', { producerId: data.producerId, participantId });
+
+      callback();
+    } catch (error) {
+      logger.error('Error resuming producer:', error);
+      callback({ error: { message: (error as Error).message } });
+    }
+  }
+
+  /**
    * Handle chat message
    */
   private handleChatMessage(
@@ -806,7 +915,7 @@ export class SignalingServer {
 
     const mapping = this.socketToParticipant.get(socket.id);
     if (mapping) {
-      await this.handleLeaveRoom(socket, () => {});
+      await this.handleLeaveRoom(socket, () => { });
     }
   }
 
@@ -829,6 +938,16 @@ export class SignalingServer {
         return;
       }
 
+      // 🔥 Fix Zombie: Check if participant is actually in the room
+      const room = this.roomManager.getRoom(effectiveRoomId);
+      if (!room || !room.participants.has(participantId)) {
+        logger.warn('Participant not found in room, skipping caption (zombie check)', {
+          roomId: effectiveRoomId,
+          participantId
+        });
+        return;
+      }
+
       // Sequence per (room, participant)
       const seq = this.nextCaptionSeq(effectiveRoomId, participantId);
 
@@ -841,7 +960,7 @@ export class SignalingServer {
         isFinal: !!isFinal,
         timestamp: data.timestamp || Date.now(),
       };
-      
+
       // Emit new caption event
       this.broadcastGatewayCaption(effectiveRoomId, caption);
 
@@ -866,10 +985,10 @@ export class SignalingServer {
 
         // Group participants by target language to batch translation requests
         const targetLanguages = new Set<string>();
-        
+
         for (const [pid, p] of room.participants.entries()) {
           if (pid === participantId) continue; // Skip speaker
-          
+
           // If participant has a target language and it's different from source
           if (p.targetLanguage && p.targetLanguage !== sourceLang) {
             targetLanguages.add(p.targetLanguage);
@@ -879,10 +998,19 @@ export class SignalingServer {
         // Call translation service for each target language
         for (const targetLang of targetLanguages) {
           try {
+            // Build direction string for VinAI Translation API
+            // VinAI API requires direction: "vi2en" or "en2vi"
+            const direction = `${sourceLang}2${targetLang}`;
+            
+            // Validate direction (only vi2en and en2vi are supported)
+            if (direction !== 'vi2en' && direction !== 'en2vi') {
+              logger.warn(`Unsupported translation direction: ${direction}, skipping`);
+              continue;
+            }
+
             const response = await axios.post(`${config.translation.url}/translate`, {
               text,
-              source_lang: sourceLang,
-              target_lang: targetLang
+              direction  // VinAI API format: "vi2en" or "en2vi"
             });
 
             const translatedText = response.data.translated_text;
@@ -899,7 +1027,7 @@ export class SignalingServer {
               isFinal: true,
               timestamp: Date.now()
             });
-            
+
           } catch (err) {
             logger.error(`Translation error (${sourceLang} -> ${targetLang}):`, err);
           }

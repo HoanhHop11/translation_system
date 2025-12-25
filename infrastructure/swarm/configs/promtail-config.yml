@@ -1,0 +1,118 @@
+# ===========================================
+# Promtail Configuration - Production Grade
+# Log Collection Agent for Docker Swarm
+# Updated: December 9, 2025
+# ===========================================
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+    tenant_id: ""
+    batchwait: 1s
+    batchsize: 1048576
+    timeout: 10s
+
+scrape_configs:
+  # ===========================================
+  # Docker Container Logs
+  # ===========================================
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      # Chỉ scrape containers thuộc stack "translation"
+      - source_labels: ['__meta_docker_container_label_com_docker_stack_namespace']
+        regex: 'translation'
+        action: keep
+      # Container name (remove leading /)
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: container
+      # Stack name từ label
+      - source_labels: ['__meta_docker_container_label_com_docker_stack_namespace']
+        target_label: stack
+      # Service name từ label (full: translation_stt -> extract: stt)
+      - source_labels: ['__meta_docker_container_label_com_docker_swarm_service_name']
+        target_label: swarm_service
+      # Short service name (without stack prefix)
+      - source_labels: ['__meta_docker_container_label_com_docker_swarm_service_name']
+        regex: 'translation_(.+)'
+        replacement: '${1}'
+        target_label: service
+      # Node ID
+      - source_labels: ['__meta_docker_container_label_com_docker_swarm_node_id']
+        target_label: node_id
+      # Image name
+      - source_labels: ['__meta_docker_container_image']
+        target_label: image
+    pipeline_stages:
+      - docker: {}
+      # Parse JSON logs nếu có
+      - match:
+          selector: '{job="docker"}'
+          stages:
+            - json:
+                expressions:
+                  level: level
+                  msg: msg
+                  message: message
+                  timestamp: timestamp
+                  ts: ts
+            - labels:
+                level:
+            - timestamp:
+                source: timestamp
+                format: RFC3339
+                fallback_formats:
+                  - RFC3339Nano
+                  - Unix
+                  - UnixMs
+
+  # ===========================================
+  # System Logs
+  # ===========================================
+  - job_name: system
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: varlogs
+          __path__: /var/log/*.log
+    pipeline_stages:
+      - multiline:
+          firstline: '^\d{4}-\d{2}-\d{2}'
+          max_wait_time: 3s
+      - regex:
+          expression: '^(?P<timestamp>\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}[^\s]*)\s+(?P<level>\w+)\s+(?P<message>.*)$'
+      - labels:
+          level:
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+
+  # ===========================================
+  # Docker Swarm Service Logs (qua journald)
+  # ===========================================
+  - job_name: journal
+    journal:
+      max_age: 12h
+      path: /var/log/journal
+      labels:
+        job: systemd-journal
+    relabel_configs:
+      - source_labels: ['__journal__systemd_unit']
+        target_label: unit
+      - source_labels: ['__journal__hostname']
+        target_label: hostname
+      - source_labels: ['__journal_priority_keyword']
+        target_label: level
+    pipeline_stages:
+      - labels:
+          level:

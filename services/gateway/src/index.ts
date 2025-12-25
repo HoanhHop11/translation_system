@@ -135,6 +135,8 @@ async function initialize(): Promise<void> {
     audioProcessor = new AudioProcessor();
 
     // Initialize SignalingServer
+    // NOTE: SignalingServer constructor đã tự đăng ký event listeners cho AudioProcessor
+    // KHÔNG đăng ký lại ở đây để tránh duplicate handling
     logger.info('Initializing SignalingServer...');
     signalingServer = new SignalingServer(
       httpServer,
@@ -142,14 +144,6 @@ async function initialize(): Promise<void> {
       roomManager,
       audioProcessor
     );
-
-    // Connect AudioProcessor events to SignalingServer
-    audioProcessor.on('transcription', (data) => {
-      signalingServer.handleGatewayCaption(data);
-    });
-    audioProcessor.on('caption-error', (data) => {
-      signalingServer.handleGatewayCaptionError(data);
-    });
 
     // Start HTTP server
     await new Promise<void>((resolve) => {

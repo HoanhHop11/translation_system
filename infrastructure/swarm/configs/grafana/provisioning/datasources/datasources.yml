@@ -1,0 +1,60 @@
+# ===========================================
+# Grafana Datasources Provisioning
+# Tự động cấu hình datasources khi Grafana khởi động
+# Updated: December 9, 2025
+# ===========================================
+
+apiVersion: 1
+
+datasources:
+  # ===========================================
+  # Prometheus - Metrics Primary
+  # ===========================================
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      httpMethod: POST
+      manageAlerts: true
+      prometheusType: Prometheus
+      prometheusVersion: 2.54.0
+      timeInterval: 15s
+      exemplarTraceIdDestinations:
+        - name: traceID
+          datasourceUid: loki
+    version: 1
+    uid: prometheus
+
+  # ===========================================
+  # Loki - Logs
+  # ===========================================
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: false
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        - name: TraceID
+          matcherRegex: "traceID=(\\w+)"
+          url: "$${__value.raw}"
+          datasourceUid: prometheus
+    version: 1
+    uid: loki
+
+  # ===========================================
+  # Alertmanager
+  # ===========================================
+  - name: Alertmanager
+    type: alertmanager
+    access: proxy
+    url: http://alertmanager:9093
+    editable: false
+    jsonData:
+      implementation: prometheus
+    version: 1
+    uid: alertmanager

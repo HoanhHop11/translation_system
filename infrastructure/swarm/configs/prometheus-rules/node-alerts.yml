@@ -1,0 +1,157 @@
+# ===========================================
+# Prometheus Alert Rules - Node & Infrastructure
+# Updated: December 9, 2025
+# ===========================================
+
+groups:
+  - name: node-alerts
+    interval: 30s
+    rules:
+      # ===========================================
+      # Node Health Alerts
+      # ===========================================
+      - alert: NodeDown
+        expr: up{job="dockerswarm-nodes"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: infrastructure
+        annotations:
+          summary: "Node {{ $labels.instance }} is down"
+          description: "Node {{ $labels.instance }} has been unreachable for more than 2 minutes."
+          runbook_url: "https://docs.jbcalling.site/runbooks/node-down"
+
+      - alert: NodeHighCpuUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: infrastructure
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is above 85% (current: {{ printf \"%.2f\" $value }}%) on node {{ $labels.instance }}"
+
+      - alert: NodeCriticalCpuUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 2m
+        labels:
+          severity: critical
+          service: infrastructure
+        annotations:
+          summary: "Critical CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is above 95% (current: {{ printf \"%.2f\" $value }}%) on node {{ $labels.instance }}"
+
+      - alert: NodeHighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: infrastructure
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is above 85% (current: {{ printf \"%.2f\" $value }}%) on node {{ $labels.instance }}"
+
+      - alert: NodeCriticalMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+          service: infrastructure
+        annotations:
+          summary: "Critical memory usage on {{ $labels.instance }}"
+          description: "Memory usage is above 95% (current: {{ printf \"%.2f\" $value }}%) on node {{ $labels.instance }}"
+
+      - alert: NodeDiskSpaceLow
+        expr: (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"})) * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+          service: infrastructure
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Disk space is above 80% used (current: {{ printf \"%.2f\" $value }}%) on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+
+      - alert: NodeDiskSpaceCritical
+        expr: (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"})) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+          service: infrastructure
+        annotations:
+          summary: "Critical disk space on {{ $labels.instance }}"
+          description: "Disk space is above 90% used (current: {{ printf \"%.2f\" $value }}%) on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+
+      # ===========================================
+      # Network Alerts
+      # ===========================================
+      - alert: NodeHighNetworkErrors
+        expr: rate(node_network_receive_errs_total[5m]) + rate(node_network_transmit_errs_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: infrastructure
+        annotations:
+          summary: "High network errors on {{ $labels.instance }}"
+          description: "Network interface {{ $labels.device }} has {{ printf \"%.2f\" $value }} errors/sec"
+
+  - name: docker-alerts
+    interval: 30s
+    rules:
+      # ===========================================
+      # Docker Daemon Alerts
+      # ===========================================
+      - alert: DockerDaemonDown
+        expr: up{job="docker-daemon"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: docker
+        annotations:
+          summary: "Docker daemon is down on {{ $labels.instance }}"
+          description: "Docker daemon on {{ $labels.instance }} is not responding."
+
+  - name: container-alerts
+    interval: 30s
+    rules:
+      # ===========================================
+      # Container Resource Alerts
+      # ===========================================
+      - alert: ContainerHighCpuUsage
+        expr: (sum by(name, instance) (rate(container_cpu_usage_seconds_total{name!=""}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: container
+        annotations:
+          summary: "High CPU usage in container {{ $labels.name }}"
+          description: "Container {{ $labels.name }} on {{ $labels.instance }} is using {{ printf \"%.2f\" $value }}% CPU"
+
+      - alert: ContainerHighMemoryUsage
+        expr: (sum by(name, instance) (container_memory_usage_bytes{name!=""}) / sum by(name, instance) (container_spec_memory_limit_bytes{name!=""}) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: container
+        annotations:
+          summary: "High memory usage in container {{ $labels.name }}"
+          description: "Container {{ $labels.name }} on {{ $labels.instance }} is using {{ printf \"%.2f\" $value }}% of its memory limit"
+
+      - alert: ContainerOOMKilled
+        expr: increase(container_oom_events_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: container
+        annotations:
+          summary: "Container OOM Killed: {{ $labels.name }}"
+          description: "Container {{ $labels.name }} was killed due to Out Of Memory on {{ $labels.instance }}"
+
+      - alert: ContainerRestarted
+        expr: increase(container_restart_count[1h]) > 3
+        for: 5m
+        labels:
+          severity: warning
+          service: container
+        annotations:
+          summary: "Container restarting frequently: {{ $labels.name }}"
+          description: "Container {{ $labels.name }} has restarted {{ printf \"%.0f\" $value }} times in the last hour"

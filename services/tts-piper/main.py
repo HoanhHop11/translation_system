@@ -6,6 +6,7 @@ import base64
 import wave
 from typing import Optional, List
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, JSONResponse
 from pydantic import BaseModel
 from piper import PiperVoice
@@ -18,6 +19,15 @@ logging.basicConfig(
 logger = logging.getLogger("tts-piper")
 
 app = FastAPI(title="JB Calling TTS Piper Service")
+
+# CORS middleware - Allow all origins for API access
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Configuration from Environment Variables
 PIPER_MODEL_VI = os.getenv("PIPER_MODEL_VI", "/models/piper/vi_VN-vais1000-medium.onnx")

@@ -5,7 +5,7 @@ uvicorn[standard]==0.32.1
 python-multipart==0.0.20
 
 # Sherpa-ONNX + ONNX Runtime (CPU-only)
-sherpa-onnx==1.12.17
+sherpa-onnx==1.12.19
 onnxruntime==1.23.2
 
 # Audio processing

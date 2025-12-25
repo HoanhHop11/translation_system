@@ -237,6 +237,59 @@ class TTSPlaybackService {
     
     console.log('⏹️ Stopped all playback');
   }
+
+  /**
+   * 🔥 Barge-In: Ngắt TTS ngay lập tức khi user bắt đầu nói
+   * Giữ lại playback queue để resume sau nếu cần (optional)
+   * 
+   * @param {boolean} clearQueue - Xóa queue hay giữ lại để resume
+   * @returns {boolean} - true nếu có TTS đang phát bị ngắt
+   */
+  interruptForBargeIn(clearQueue = true) {
+    let wasPlaying = false;
+    
+    // Stop all active sources
+    for (const [participantId, sources] of this.activeSources.entries()) {
+      if (sources.length > 0) {
+        wasPlaying = true;
+        
+        for (const source of sources) {
+          try {
+            source.stop();
+            source.disconnect();
+          } catch (error) {
+            // Ignore errors (source might be already stopped)
+          }
+        }
+        
+        this.activeSources.delete(participantId);
+      }
+      
+      // Optionally clear queue
+      if (clearQueue) {
+        this.playbackQueue.delete(participantId);
+      }
+    }
+    
+    if (wasPlaying) {
+      console.log('🛑 [Barge-In] TTS interrupted - user is speaking');
+    }
+    
+    return wasPlaying;
+  }
+
+  /**
+   * Check xem có TTS nào đang phát không
+   * @returns {boolean}
+   */
+  isPlaying() {
+    for (const sources of this.activeSources.values()) {
+      if (sources.length > 0) {
+        return true;
+      }
+    }
+    return false;
+  }
   
   /**
    * Set volume (0.0 to 1.0)

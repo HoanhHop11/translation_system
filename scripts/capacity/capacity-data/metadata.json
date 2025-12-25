@@ -1,0 +1,13 @@
+{
+  "collection_time": "2025-12-10T07:23:27+00:00",
+  "prometheus_url": "https://prometheus.jbcalling.site",
+  "time_range": "24h",
+  "start_time": 1765265006,
+  "end_time": 1765351406,
+  "start_time_human": "2025-12-09 07:23:26",
+  "end_time_human": "2025-12-10 07:23:26",
+  "step": "5m",
+  "files": [
+    "container-cpu-usage.json","container-memory-limit.json","container-memory-usage.json","container-network-rx.json","container-network-tx.json","external-probe-success.json","external-response-time.json","gateway-audio-streams.json","gateway-rooms.json","gateway-workers.json","node-cpu-count.json","node-cpu-usage.json","node-disk-read.json","node-disk-usage.json","node-disk-write.json","node-memory-total.json","node-memory-usage.json","node-network-rx.json","node-network-tx.json","redis-commands-rate.json","redis-connections.json","redis-memory-max.json","redis-memory-used.json","service-availability-24h.json","service-up-status.json","ssl-cert-expiry-days.json","stt-hourly-requests.json","stt-p50-latency.json","stt-p95-latency.json","stt-p99-latency.json","stt-request-rate.json","traefik-error-rate.json","traefik-p95-latency.json","traefik-request-rate-by-service.json","traefik-request-rate.json","translation-cache-hit-rate.json","translation-p95-latency.json","translation-request-rate.json","translation-success-rate.json","tts-http-status.json","tts-probe-success.json","tts-response-time.json"
+  ]
+}

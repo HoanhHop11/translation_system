@@ -348,8 +348,11 @@
 }
 
 .auth-logo {
-  text-align: center;
-  margin-bottom: var(--space-6);
+  display: block;
+  width: 80px;
+  height: 80px;
+  margin: 0 auto var(--space-6);
+  filter: drop-shadow(0 4px 12px rgba(15, 76, 92, 0.4));
 }
 
 .auth-title {

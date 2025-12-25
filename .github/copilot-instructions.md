@@ -66,47 +66,51 @@ Dự án: **Hệ thống Videocall Dịch Thuật Real-time Đa Ngôn Ngữ**
 ### Cấu hình Hạ tầng
 
 #### SSH Connection Status
-⚠️ **QUAN TRỌNG**: Hiện tại đang SSH vào **translation02** (Worker Node)
-- **Node hiện tại**: translation02 (34.142.190.250)
-- **Manager Node**: translation01 (34.143.235.114)
-- **KHÔNG cần SSH lại** khi thực hiện các tác vụ trên translation02
-- Khi cần thực hiện lệnh Docker Swarm (deploy, service management), cần SSH sang **translation01** (Manager Node)
+⚠️ **QUAN TRỌNG**: Hiện tại đang SSH vào **translation01** (Manager Node)
+- **Node hiện tại**: translation01 (35.185.191.80)
+- **Manager Node**: translation01 - ĐANG KẾT NỐI
+- **KHÔNG cần SSH lại** khi thực hiện các tác vụ trên translation01
+- Docker Swarm commands có thể chạy trực tiếp (đang ở Manager Node)
+- SSH đến worker nodes: sử dụng key `~/.ssh/translation_cluster`
 
 #### Chi tiết Instances
 
-**Instance 1: translation01** (Manager Node)
-- Loại: c4d-standard-4 (4 vCPUs, 30 GB RAM)
+**Instance 1: translation01** (Manager Node - ⚠️ ĐANG KẾT NỐI)
+- Loại: c2d-highmem-4 (4 vCPUs, 32 GB RAM)
 - Disk: 100GB Balanced persistent disk
 - Zone: asia-southeast1-a
-- External IP: 34.143.235.114
-- Internal IP: 10.200.0.2 ⚠️ **Updated Nov 18, 2025** (was 10.148.0.5)
+- External IP: 34.87.0.159 ⚠️ **Updated Dec 02, 2025**
+- External IPv6: 2600:1900:4080:470:0:1::
+- Internal IP: 10.200.0.5 ⚠️ **Updated Dec 02, 2025**
 - Network: VPC 10.200.0.0/24
 - Vai trò: **Manager Node** + Core Services (Traefik, Gateway, Frontend)
 - Không có GPU
-- **Docker Swarm**: Manager node (Re-init với 10.200.0.2:2377)
+- **Docker Swarm**: Manager node (Leader, 10.200.0.5:2377)
+- **⚠️ SSH Status**: ĐANG KẾT NỐI - Không cần SSH lại
 
-**Instance 2: translation02** (Worker Node - ⚠️ Đang kết nối)
-- Loại: c2d-highcpu-8 (8 vCPUs, 16 GB RAM)  
+**Instance 2: translation02** (Worker Node)
+- Loại: c2d-highmem-4 (4 vCPUs, 32 GB Memory)  
 - Disk: 100GB SSD persistent disk
-- Zone: asia-southeast1-b
-- External IP: 34.142.190.250
-- Internal IP: 10.200.0.3 ⚠️ **Updated Nov 18, 2025** (was 10.148.0.3)
+- Zone: asia-southeast1-a ⚠️ **Updated Dec 02, 2025** (same zone as translation01)
+- External IP: 35.240.181.166 ⚠️ **Updated Dec 02, 2025**
+- Internal IP: 10.200.0.6 ⚠️ **Updated Dec 02, 2025**
 - Network: VPC 10.200.0.0/24
 - Firewall: HTTP, HTTPS, Health check, WebRTC (UDP/TCP 40000-40100)
 - Vai trò: Worker Node + AI Services (STT, Translation)
 - **Docker Swarm**: Worker node (Active, Ready)
-- **⚠️ SSH Status**: ĐANG KẾT NỐI - Không cần SSH lại
+- **SSH từ translation01**: `ssh -i ~/.ssh/translation_cluster hopboy2003@10.200.0.6`
 
 **Instance 3: translation03** (Worker Node)
-- Loại: c2d-highcpu-4 (4 vCPUs, 8 GB RAM)
+- Loại: c2d-highmem-4 (4 vCPUs, 32 GB Memory)
 - Disk: 50GB SSD persistent disk
-- Zone: asia-southeast1-b ⚠️ **Different zone from translation01/02**
-- External IP: 34.126.138.3
-- Internal IP: 10.200.0.4 ⚠️ **Updated Nov 18, 2025** (was 10.148.0.4)
+- Zone: asia-southeast1-a ⚠️ **Updated Dec 02, 2025** (same zone as all nodes)
+- External IP: 34.177.86.87 ⚠️ **Updated Dec 02, 2025**
+- Internal IP: 10.200.0.8 ⚠️ **Updated Dec 02, 2025**
 - Network: VPC 10.200.0.0/24
 - Firewall: HTTP, HTTPS, Health check
 - Vai trò: Worker Node + Monitoring (Prometheus, Grafana, TTS)
 - **Docker Swarm**: Worker node (Active, Ready)
+- **SSH từ translation01**: `ssh -i ~/.ssh/translation_cluster hopboy2003@10.200.0.8`
 
 ## Kiến trúc Hệ thống
 
@@ -340,12 +344,13 @@ async def transcribe_audio(
 
 ### SSH & Environment Context
 ⚠️ **QUAN TRỌNG - Trạng thái SSH hiện tại**:
-- **Đang kết nối SSH vào**: translation02 (35.247.177.106)
-- **KHÔNG cần SSH lại** khi làm việc trên translation02
-- **Manager Node**: translation01 (34.143.235.114) - cần SSH riêng cho Docker Swarm commands
+- **Đang kết nối SSH vào**: translation01 (35.185.191.80) - **Manager Node**
+- **KHÔNG cần SSH lại** khi làm việc trên translation01
+- Docker Swarm commands có thể chạy trực tiếp (đang ở Manager Node)
 - **Kiểm tra trước khi SSH**: Luôn xác nhận node hiện tại trước khi thực hiện lệnh SSH
-- **Docker Swarm commands**: Phải chạy trên translation01 (Manager Node)
-- **Local commands**: Có thể chạy trực tiếp trên translation02
+- **SSH đến worker nodes**:
+  - `ssh -i ~/.ssh/translation_cluster hopboy2003@10.200.0.6` (translation02)
+  - `ssh -i ~/.ssh/translation_cluster hopboy2003@10.200.0.8` (translation03)
 
 #### SSH Command Templates
 ⚠️ **translation01 đã có IPv6** - Sử dụng gcloud compute ssh thay vì ssh trực tiếp:

@@ -1,0 +1,222 @@
+# ===========================================
+# Prometheus Configuration - Production Grade
+# Docker Swarm Monitoring with Service Discovery
+# Updated: December 9, 2025
+# ===========================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'jbcalling-production'
+    env: 'production'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Load alert rules
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  # ===========================================
+  # Prometheus self-monitoring
+  # ===========================================
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: prometheus
+          instance_name: prometheus
+
+  # ===========================================
+  # Docker Swarm Service Discovery - Tasks
+  # Auto-discover services with prometheus_job label
+  # ===========================================
+  - job_name: 'dockerswarm-tasks'
+    dockerswarm_sd_configs:
+      - host: unix:///var/run/docker.sock
+        role: tasks
+    relabel_configs:
+      # Only keep containers that should be running
+      - source_labels: [__meta_dockerswarm_task_desired_state]
+        regex: running
+        action: keep
+      # Only keep containers with prometheus-job label
+      - source_labels: [__meta_dockerswarm_service_label_prometheus_job]
+        regex: .+
+        action: keep
+      # Use prometheus-job label as job name
+      - source_labels: [__meta_dockerswarm_service_label_prometheus_job]
+        target_label: job
+      # Set instance from task name
+      - source_labels: [__meta_dockerswarm_task_name]
+        target_label: instance
+      # Add service name label
+      - source_labels: [__meta_dockerswarm_service_name]
+        target_label: service
+      # Add node hostname
+      - source_labels: [__meta_dockerswarm_node_hostname]
+        target_label: node
+      # Add stack name
+      - source_labels: [__meta_dockerswarm_service_label_com_docker_stack_namespace]
+        target_label: stack
+
+  # ===========================================
+  # Node Exporter - System Metrics (all nodes)
+  # Using static config for reliable scraping
+  # ===========================================
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['10.200.0.5:9100']
+        labels:
+          instance: 'translation01'
+      - targets: ['10.200.0.6:9100']
+        labels:
+          instance: 'translation02'
+      - targets: ['10.200.0.8:9100']
+        labels:
+          instance: 'translation03'
+
+  # ===========================================
+  # cAdvisor (Container Metrics) - all nodes
+  # Using static config with internal IPs
+  # ===========================================
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['10.200.0.5:8080']
+        labels:
+          instance: 'translation01'
+          service: cadvisor
+      - targets: ['10.200.0.6:8080']
+        labels:
+          instance: 'translation02'
+          service: cadvisor
+      - targets: ['10.200.0.8:8080']
+        labels:
+          instance: 'translation03'
+          service: cadvisor
+
+  # ===========================================
+  # Traefik Reverse Proxy
+  # ===========================================
+  - job_name: 'traefik'
+    static_configs:
+      - targets: ['traefik:8080']
+        labels:
+          service: traefik
+          instance_name: traefik-manager
+
+  # ===========================================
+  # Application Services - AI Pipeline
+  # ===========================================
+  - job_name: 'gateway'
+    static_configs:
+      - targets: ['gateway:3000']
+        labels:
+          service: gateway
+          type: webrtc
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  - job_name: 'stt'
+    static_configs:
+      - targets: ['stt:8002']
+        labels:
+          service: stt
+          type: ai
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  - job_name: 'translation'
+    static_configs:
+      - targets: ['translation:8005']
+        labels:
+          service: translation
+          type: ai
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # ===========================================
+  # TTS Services via Blackbox Exporter
+  # TTS (Piper) doesn't export Prometheus metrics
+  # Use blackbox exporter to probe /health endpoint
+  # ===========================================
+  - job_name: 'tts'
+    metrics_path: /probe
+    params:
+      module: [http_health_json]
+    static_configs:
+      - targets:
+        - http://translation_tts_translation02:8004/health
+        - http://translation_tts_translation03:8004/health
+        labels:
+          service: tts
+          type: ai
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__address__]
+        regex: 'http://([^:]+):(\d+).*'
+        replacement: '$1:$2'
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # ===========================================
+  # External Endpoints Monitoring via Blackbox
+  # ===========================================
+  - job_name: 'blackbox-external'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - https://jbcalling.site
+        - https://grafana.jbcalling.site
+        - https://prometheus.jbcalling.site
+        labels:
+          type: external
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__address__]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # ===========================================
+  # Redis Monitoring
+  # ===========================================
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+        labels:
+          service: redis
+          type: cache
+
+  # ===========================================
+  # Loki Log Aggregation
+  # ===========================================
+  - job_name: 'loki'
+    static_configs:
+      - targets: ['loki:3100']
+        labels:
+          service: loki
+          type: logging
+    metrics_path: /metrics
+
+  # ===========================================
+  # Grafana
+  # ===========================================
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+        labels:
+          service: grafana
+          type: monitoring
+    metrics_path: /metrics

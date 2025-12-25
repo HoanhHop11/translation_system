@@ -10,6 +10,7 @@ import {
   Sparkles,
   Info 
 } from 'lucide-react'
+import Logo from '../assets/JBCalling_Web_NoBg.svg'
 
 export default function Home() {
   const navigate = useNavigate()
@@ -65,8 +66,8 @@ export default function Home() {
   return (
     <div className="home-container">
       <div className="home-header">
-        <h1>JB Calling</h1>
-        <p>Hệ thống video call với dịch thuật real-time</p>
+        <img src={Logo} alt="JB Calling" className="home-logo" />
+        <p className="home-tagline">Hệ thống video call với dịch thuật real-time</p>
       </div>
 
       <div className="join-room-section">

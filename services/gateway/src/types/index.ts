@@ -35,22 +35,22 @@ export interface Participant {
   socketId: string;
   name: string;
   joinedAt: number;
-  
+
   // Language preferences
   sourceLanguage?: string;
   targetLanguage?: string;
-  
+
   // WebRTC transports cho bidirectional streaming
   sendTransport?: WebRtcTransport;
   recvTransport?: WebRtcTransport;
-  
+
   // Media streams
   producers: Map<string, Producer>; // audio/video producers
   consumers: Map<string, Consumer>; // consuming other participants' streams
-  
+
   // Capabilities
   rtpCapabilities?: RtpCapabilities;
-  
+
   // Audio streaming cho STT
   audioProducer?: Producer;
   isAudioStreaming: boolean;
@@ -63,36 +63,36 @@ export interface ServerToClientEvents {
   // Connection events
   'connected': (data: { socketId: string }) => void;
   'error': (error: ErrorResponse) => void;
-  
+
   // Room streaming events
   'room-created': (data: { roomId: string }) => void;
   'room-joined': (data: RoomJoinedData) => void;
   'participant-joined': (data: ParticipantData) => void;
   'participant-left': (data: { participantId: string }) => void;
-  
+
   // WebRTC streaming setup
   'router-rtp-capabilities': (capabilities: RtpCapabilities) => void;
   'transport-created': (data: TransportData) => void;
   'transport-connected': () => void;
-  
+
   // Media streaming events
   'producer-created': (data: ProducerData) => void;
   'producer-closed': (data: { producerId: string }) => void;
   'consumer-created': (data: ConsumerData) => void;
   'consumer-closed': (data: { consumerId: string }) => void;
-  
+
   // New producer available for consumption (streaming notification)
   'new-producer': (data: { producerId: string; participantId: string; kind: 'audio' | 'video' }) => void;
-  
+
   // STT streaming events
   'transcription': (data: TranscriptionData) => void;
   'translation': (data: TranslationData) => void;
   'gateway-caption': (data: GatewayCaption) => void;
   'caption-status': (data: CaptionStatus) => void;
-  
+
   // Chat events
   'chat-message': (data: ChatMessageData) => void;
-  
+
   // Screen share events
   'screen-share-started': (data: { participantId: string; roomId: string }) => void;
   'screen-share-stopped': (data: { participantId: string; roomId: string }) => void;
@@ -103,7 +103,7 @@ export interface ClientToServerEvents {
   'create-room': (callback: (response: RoomResponse) => void) => void;
   'join-room': (data: { roomId: string; name: string }, callback: (response: RoomJoinResponse) => void) => void;
   'leave-room': (callback: () => void) => void;
-  
+
   // WebRTC transport setup cho streaming
   'get-router-rtp-capabilities': (callback: (capabilities: RtpCapabilities) => void) => void;
   'create-webrtc-transport': (
@@ -114,7 +114,7 @@ export interface ClientToServerEvents {
     data: { transportId: string; dtlsParameters: DtlsParameters },
     callback: (response: { error?: string }) => void
   ) => void;
-  
+
   // Media streaming
   'produce': (
     data: { transportId: string; kind: 'audio' | 'video'; rtpParameters: any },
@@ -124,18 +124,18 @@ export interface ClientToServerEvents {
     data: { producerId: string; rtpCapabilities: RtpCapabilities },
     callback: (response: ConsumeResponse) => void
   ) => void;
-  
+
   // Consumer control
   'resume-consumer': (data: { consumerId: string }, callback: () => void) => void;
   'pause-consumer': (data: { consumerId: string }, callback: () => void) => void;
   'close-producer': (data: { producerId: string }, callback: () => void) => void;
-  
+
   // Chat events
   'chat-message': (data: { sender: string; text: string; timestamp?: number }) => void;
 
   // Language update (for STT/translation preferences)
   'update-language': (data: { sourceLanguage?: string; targetLanguage?: string }) => void;
-  
+
   // Screen share events
   'screen-share-started': (data: { roomId: string }) => void;
   'screen-share-stopped': (data: { roomId: string }) => void;
@@ -174,6 +174,8 @@ export interface ParticipantData {
   id: string;
   name: string;
   joinedAt: number;
+  sourceLanguage?: string;
+  targetLanguage?: string;
   producers: { id: string; kind: 'audio' | 'video' }[];
 }
 
@@ -293,4 +295,5 @@ export interface AudioStreamBuffer {
   decoder?: any;
   udpPort?: number;
   language?: string;
+  vadProcessor?: any; // ✅ Per-participant VAD instance để tránh crosstalk
 }

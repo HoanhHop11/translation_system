@@ -1,6 +1,18 @@
-# 📚 Documentation Index - November 17, 2025
+# 📚 Documentation Index - December 7, 2025
 
 **Cấu trúc documentation đã được tổ chức lại để dễ quản lý và tìm kiếm.**
+
+> 🆕 **Cập nhật mới nhất (Dec 7, 2025):**
+> - **Piper TTS 2.0.1** - Vietnamese + English voices với CORS support
+> - **Gateway 2.0.6** - Per-participant VAD, Opus decode fixes, VAD tuning
+> - **Frontend 2.0.16** - Auto-TTS, LocalVAD tuning, declarative mute sync
+> - **Work Log**: `docs/wrap-ups/WORK-LOG-DEC2025.md` - Nhật ký làm việc chi tiết
+>
+> **Cập nhật trước (Dec 2, 2025):**
+> - Thêm `docs/FIREWALL-CONFIGURATION.md` - Hướng dẫn cấu hình Firewall Rules
+> - Thêm `scripts/setup-firewall-rules.sh` - Script tự động tạo firewall rules
+> - TTS Services đã chuyển sang Docker Hub image
+> - **Reorganized**: Di chuyển các file vào đúng thư mục (reports/, investigations/, tdd/)
 
 ---
 
@@ -23,45 +35,78 @@ jbcalling_translation_realtime/
 ├── 📄 DOCUMENTATION-INDEX.md             ⭐ THIS FILE
 │
 ├── 📁 docs/                              # Technical documentation
-│   ├── 01-ARCHITECTURE.md
-│   ├── 02-SETUP-GUIDE.md
-│   ├── 03-DOCKER-SWARM.md
-│   ├── 04-SERVICES.md
-│   ├── 05-AI-MODELS.md
-│   ├── 06-WEBRTC.md
-│   ├── 07-API-REFERENCES.md
-│   ├── 08-DEPLOYMENT.md
-│   ├── 09-MONITORING.md
-│   ├── 10-TROUBLESHOOTING.md
-│   ├── 11-IPV6-SETUP-GUIDE.md           🆕
-│   ├── IPV6-QUICK-START.md
-│   ├── SSH-SETUP-GUIDE.md
+│   ├── 01-ARCHITECTURE.md                # System architecture
+│   ├── 02-SETUP-GUIDE.md                 # GCP & Swarm setup
+│   ├── 03-DOCKER-SWARM.md                # Swarm management
+│   ├── 04-SERVICES.md                    # Service configs
+│   ├── 05-AI-MODELS.md                   # STT/Translation/TTS
+│   ├── 06-WEBRTC.md                      # WebRTC & MediaSoup
+│   ├── 07-API-REFERENCES.md              # API endpoints
+│   ├── 08-DEPLOYMENT.md                  # Deployment guide
+│   ├── 09-MONITORING.md                  # Monitoring setup
+│   ├── 10-TROUBLESHOOTING.md             # Common issues
+│   ├── 11-IPV6-SETUP-GUIDE.md            # IPv6 setup
+│   ├── 12-FEASIBILITY-ANALYSIS.md        # Feasibility study
+│   ├── FIREWALL-CONFIGURATION.md         # 🆕 GCP Firewall Rules
+│   ├── INTEGRATION-GUIDE.md              # Integration guide
+│   ├── IPV6-QUICK-START.md               # IPv6 quick start
+│   ├── LICENSE-COMPLIANCE.md             # License info
+│   ├── MIGRATION-PLAN-DEC2025.md         # Migration plan
+│   ├── SSH-SETUP-GUIDE.md                # SSH setup
+│   ├── SSL-DEPLOYMENT-GUIDE.md           # SSL/TLS setup
+│   ├── SYSTEM-ARCHITECTURE-DESIGN-SAD.md # SAD with diagrams
 │   │
-│   ├── 📁 wrap-ups/                     # Session wrap-up reports
-│   │   ├── WRAP-UP-NOV17-MEDIASOUP-SFU-COMPLETE.md  🆕 LATEST
+│   ├── 📁 wrap-ups/                      # Session wrap-up reports
+│   │   ├── WRAP-UP-NOV17-MEDIASOUP-SFU-COMPLETE.md
 │   │   ├── WRAP-UP-NOV11-FINAL.md
 │   │   └── WRAP-UP-OCT15.md
 │   │
-│   ├── 📁 reports/                      # Historical reports
-│   │   ├── 📁 phase1/                   # Phase 1 deployment
-│   │   ├── 📁 phase2/                   # Phase 2 SSL/HTTPS
-│   │   ├── 📁 phase3/                   # Phase 3 AI Services
-│   │   ├── 📁 phase4-5/                 # Phase 4-5 WebRTC
-│   │   ├── 📁 hotfixes/                 # Hotfix reports
-│   │   ├── 📁 investigations/           # Technical deep dives
-│   │   ├── SYSTEM-STATUS-OCT15-2025.md
-│   │   ├── IPV6-DEPLOYMENT-SUCCESS-NOV17.md
+│   ├── 📁 reports/                       # All reports & summaries
+│   │   ├── 📁 phase1/                    # Phase 1 deployment
+│   │   ├── 📁 phase2/                    # Phase 2 SSL/HTTPS
+│   │   ├── 📁 phase3/                    # Phase 3 AI Services
+│   │   ├── 📁 phase4-5/                  # Phase 4-5 WebRTC
+│   │   ├── 📁 hotfixes/                  # Hotfix reports
+│   │   ├── 📁 investigations/            # 🆕 Research & Analysis
+│   │   │   ├── AI-OPTIMIZATION-RESEARCH.md
+│   │   │   ├── CPU-OPTIMIZED-PIPELINE-RESEARCH.md
+│   │   │   ├── STT-HALLUCINATION-SHERPA-ONNX.md
+│   │   │   ├── VIETNAMESE-OFFLINE-STREAMING-OPTIMIZATION.md
+│   │   │   └── ...
+│   │   ├── 📁 tdd/                       # 🆕 Test Design Documents
+│   │   │   ├── TDD-JBCALLING-COMPLETE.md
+│   │   │   ├── TDD-UNIFIED-REPORT.md
+│   │   │   └── ...
+│   │   ├── SYSTEM-STATUS-*.md            # Status reports
+│   │   ├── DEPLOYMENT-SUMMARY-*.md       # Deployment summaries
 │   │   └── ...
 │   │
-│   └── 📁 commit-messages/              # Git commit messages archive
+│   ├── 📁 commit-messages/               # Git commit messages
+│   └── 📁 pipeline/                      # Pipeline docs
 │
-├── 📁 infrastructure/                   # Infrastructure configs
-├── 📁 services/                         # Service source code
-├── 📁 demos/
-│   └── 📁 html/                         # HTML demo files
-├── 📁 scripts/
-├── 📁 shared/
-└── 📁 tests/
+├── 📁 infrastructure/                    # Infrastructure configs
+│   ├── 📁 swarm/
+│   │   └── stack-hybrid.yml              # Main production stack
+│   └── 📁 traefik/                       # Traefik configs
+│
+├── 📁 services/                          # Service source code
+│   ├── gateway/                          # MediaSoup SFU Gateway
+│   ├── frontend/                         # React Frontend
+│   ├── transcription/                    # STT Service
+│   ├── translation/                      # Translation Service
+│   ├── tts/                              # TTS Service
+│   └── ...
+│
+├── 📁 demos/                             # Demo applications
+│   └── 📁 html/                          # HTML demo files
+│
+├── 📁 scripts/                           # Automation scripts
+│   ├── setup-firewall-rules.sh           # 🆕 Firewall setup
+│   ├── deploy-*.sh                       # Deployment scripts
+│   └── ...
+│
+├── 📁 shared/                            # Shared utilities
+└── 📁 tests/                             # Test files
 ```
 
 ---
@@ -130,7 +175,9 @@ jbcalling_translation_realtime/
 | [docs/08-DEPLOYMENT.md](./docs/08-DEPLOYMENT.md) | Deployment guide | ✅ Up to date |
 | [docs/09-MONITORING.md](./docs/09-MONITORING.md) | Monitoring setup | ✅ Up to date |
 | [docs/10-TROUBLESHOOTING.md](./docs/10-TROUBLESHOOTING.md) | Common issues | ✅ Up to date |
-| [docs/11-IPV6-SETUP-GUIDE.md](./docs/11-IPV6-SETUP-GUIDE.md) | IPv6 setup | ✅ Complete 🆕 |
+| [docs/11-IPV6-SETUP-GUIDE.md](./docs/11-IPV6-SETUP-GUIDE.md) | IPv6 setup | ✅ Complete |
+| [docs/FIREWALL-CONFIGURATION.md](./docs/FIREWALL-CONFIGURATION.md) | GCP Firewall Rules | ✅ Complete 🆕 |
+| [docs/SYSTEM-ARCHITECTURE-DESIGN-SAD.md](./docs/SYSTEM-ARCHITECTURE-DESIGN-SAD.md) | SAD với Mermaid diagrams | ✅ Complete |
 
 ---
 
@@ -218,6 +265,18 @@ docs/03-DOCKER-SWARM.md
 
 # Step 3: Stack config
 infrastructure/swarm/stack-hybrid.yml
+```
+
+### "Tôi cần setup firewall cho hệ thống mới"
+```bash
+# Step 1: Đọc hướng dẫn chi tiết
+docs/FIREWALL-CONFIGURATION.md
+
+# Step 2: Chạy script tự động
+./scripts/setup-firewall-rules.sh
+
+# Step 3: Verify
+gcloud compute firewall-rules list --filter="network:translation-network"
 ```
 
 ### "Tôi cần fix bug"
@@ -322,14 +381,20 @@ ssh translation01 "docker service inspect translation_gateway --pretty"
 
 ---
 
-## 📊 Current Status (Nov 17, 2025)
+## 📊 Current Status (Dec 2, 2025)
 
 ### System State
 - **Phase**: 5 (MediaSoup SFU) - ✅ **100% COMPLETE**
-- **Services**: 14/14 running
+- **Services**: 13/13 running ✅
 - **Frontend**: v1.0.43 (Full SFU with consume existing producers)
-- **Gateway**: v1.0.7 (CORS fix + IPv6 support)
+- **Gateway**: v2.0.2-asr-hub
+- **TTS**: `jackboun11/jbcalling-tts-piper:latest` (Docker Hub)
 - **Status**: Full bidirectional video working 🎉
+
+### Infrastructure Updates (Dec 2, 2025)
+- ✅ Firewall rule `allow-swarm-full` đã thêm (bao gồm ESP protocol)
+- ✅ TTS services đã chuyển từ local image sang Docker Hub
+- ✅ Tài liệu Firewall Configuration đã tạo
 
 ### Next Phase
 - **Phase 6**: Translation Pipeline Integration
@@ -358,7 +423,7 @@ ssh translation01 "docker service inspect translation_gateway --pretty"
 ---
 
 **Index Created**: November 17, 2025  
-**Structure Reorganized**: November 17, 2025  
+**Last Updated**: December 2, 2025  
 **Maintained By**: Development Team  
 
 ---

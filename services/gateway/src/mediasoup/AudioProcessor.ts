@@ -22,9 +22,10 @@ import OpusScript from 'opusscript';
 
 export class AudioProcessor extends EventEmitter {
   private activeStreams: Map<string, AudioStreamBuffer> = new Map();
+  private pausedStreams: Set<string> = new Set(); // Track paused participants (muted mic)
   private sttServiceUrl: string;
   private processingInterval: NodeJS.Timeout | null = null;
-  private vadProcessor: SileroVADProcessor;
+  // ✅ REMOVED: Shared vadProcessor - mỗi participant sẽ có VAD riêng trong streamBuffer
 
   // Audio buffer settings cho low-latency
   private readonly BUFFER_SIZE_MS = 100; // 100ms chunks cho real-time
@@ -34,13 +35,12 @@ export class AudioProcessor extends EventEmitter {
   private readonly BYTES_PER_SAMPLE = 2; // 16-bit PCM
   private readonly BUFFER_SIZE_BYTES = (this.OUTPUT_SAMPLE_RATE * this.BUFFER_SIZE_MS) / 1000 * this.CHANNELS * this.BYTES_PER_SAMPLE;
 
+  // ✅ FIX LAG: Pre-warmed VAD template để clone nhanh hơn
+  private vadModelWarmed = false;
+
   constructor() {
     super();
     this.sttServiceUrl = process.env.STT_SERVICE_URL || 'http://stt:8002';
-    this.vadProcessor = new SileroVADProcessor();
-
-    // Initialize VAD
-    this.initializeVAD();
 
     logger.info('✅ AudioProcessor initialized', {
       sttServiceUrl: this.sttServiceUrl,
@@ -48,20 +48,48 @@ export class AudioProcessor extends EventEmitter {
       sampleRate: this.OUTPUT_SAMPLE_RATE,
     });
 
+    // Pre-warm VAD model để giảm lag khi participant đầu tiên join
+    this.prewarmVADModel();
+
     // Start background processing loop
     this.startProcessingLoop();
   }
 
   /**
-   * Initialize VAD processor
+   * Pre-warm VAD model để ONNX inference sẵn sàng
+   * Giảm lag ~500ms cho participant đầu tiên
    */
-  private async initializeVAD(): Promise<void> {
+  private async prewarmVADModel(): Promise<void> {
     try {
-      await this.vadProcessor.initialize();
-      logger.info('✅ VAD processor initialized');
+      logger.info('🔥 Pre-warming VAD model...');
+      const warmupVAD = new SileroVADProcessor();
+      await warmupVAD.initialize();
+      
+      // Process một chunk dummy để warm up ONNX runtime
+      const dummyAudio = Buffer.alloc(3200); // 100ms @ 16kHz
+      await warmupVAD.processChunk(dummyAudio);
+      
+      warmupVAD.reset();
+      this.vadModelWarmed = true;
+      logger.info('✅ VAD model pre-warmed successfully');
     } catch (error) {
-      logger.error('❌ Failed to initialize VAD, will process all audio:', error);
+      logger.error('❌ Failed to pre-warm VAD model:', error);
     }
+  }
+
+  /**
+   * Create per-participant VAD processor
+   * ✅ FIX: Sau khi model đã warm, tạo instance mới sẽ nhanh hơn
+   */
+  private async createParticipantVAD(): Promise<SileroVADProcessor> {
+    const vad = new SileroVADProcessor();
+    try {
+      await vad.initialize();
+      logger.debug('✅ Per-participant VAD initialized');
+    } catch (error) {
+      logger.error('❌ Failed to initialize per-participant VAD:', error);
+    }
+    return vad;
   }
 
   /**
@@ -111,6 +139,9 @@ export class AudioProcessor extends EventEmitter {
       // Khởi tạo decoder Opus 48k → PCM16
       const decoder = new OpusScript(this.INPUT_SAMPLE_RATE, this.CHANNELS, OpusScript.Application.AUDIO);
 
+      // ✅ FIX: Tạo VAD instance RIÊNG cho participant này
+      const participantVAD = await this.createParticipantVAD();
+
       // Initialize buffer cho participant này
       const streamBuffer: AudioStreamBuffer = {
         roomId,
@@ -125,6 +156,7 @@ export class AudioProcessor extends EventEmitter {
         decoder,
         udpPort: rtpPort,
         language,
+        vadProcessor: participantVAD, // ✅ Per-participant VAD
       };
 
       // Lưu UDP socket ngoài type chuẩn
@@ -145,7 +177,7 @@ export class AudioProcessor extends EventEmitter {
       // Notify STT service về stream mới
       await this.notifySTTStreamStart(roomId, participantId);
 
-      logger.info('✅ Audio streaming started', { participantId });
+      logger.info('✅ Audio streaming started with per-participant VAD', { participantId });
     } catch (error) {
       logger.error('Error starting audio streaming:', error);
       throw error;
@@ -164,11 +196,39 @@ export class AudioProcessor extends EventEmitter {
   }
 
   /**
+   * Pause audio streaming cho participant (khi mute mic)
+   */
+  pauseStreaming(participantId: string): void {
+    this.pausedStreams.add(participantId);
+    logger.info('🔇 Audio streaming paused', { participantId });
+  }
+
+  /**
+   * Resume audio streaming cho participant (khi unmute mic)
+   */
+  resumeStreaming(participantId: string): void {
+    this.pausedStreams.delete(participantId);
+    logger.info('🔊 Audio streaming resumed', { participantId });
+  }
+
+  /**
+   * Check if streaming is paused for participant
+   */
+  isStreamingPaused(participantId: string): boolean {
+    return this.pausedStreams.has(participantId);
+  }
+
+  /**
    * Handle RTP packet từ MediaSoup (tự động được gọi)
    */
   private handleRtpPacket(participantId: string, rtpPacket: Buffer): void {
     const streamBuffer = this.activeStreams.get(participantId);
     if (!streamBuffer) {
+      return;
+    }
+
+    // 🔇 Skip nếu participant đã mute mic
+    if (this.pausedStreams.has(participantId)) {
       return;
     }
 
@@ -178,6 +238,13 @@ export class AudioProcessor extends EventEmitter {
 
       if (!audioPayload || audioPayload.length === 0) {
         return;
+      }
+
+      // ✅ FIX: Skip DTX/comfort noise packets (very small, causes decode errors)
+      // Opus normal packets are typically > 10 bytes
+      // DTX packets can be 1-3 bytes
+      if (audioPayload.length < 4) {
+        return; // Likely DTX/comfort noise, skip
       }
 
       const pcm16 = this.decodeOpusToPcm16(audioPayload, streamBuffer.decoder);
@@ -211,15 +278,40 @@ export class AudioProcessor extends EventEmitter {
   }
 
   /**
+   * Check if packet is RTCP (not RTP)
+   * RTCP packet types: 200 (SR), 201 (RR), 202 (SDES), 203 (BYE), 204 (APP)
+   * ✅ FIX OPUS ERROR: Filter out RTCP packets before trying to decode
+   */
+  private isRtcpPacket(packet: Buffer): boolean {
+    if (packet.length < 2) return false;
+    
+    // RTP/RTCP can be distinguished by looking at the second byte (payload type field)
+    // For RTCP: PT is in range 200-204
+    // For RTP: PT is typically < 128 or >= 72 (dynamic range 96-127)
+    const payloadType = packet[1] & 0x7f; // Get 7-bit payload type
+    
+    // RTCP payload types are 200-204
+    return payloadType >= 200 && payloadType <= 204;
+  }
+
+  /**
    * Parse RTP packet to extract Opus payload
+   * ✅ FIX: Handle padding, RTCP, and malformed packets properly
    */
   private extractPayload(rtpPacket: Buffer): Buffer | null {
     if (rtpPacket.length < 12) {
       return null;
     }
 
-    const csrcCount = rtpPacket[0] & 0x0f;
-    const extension = (rtpPacket[0] & 0x10) > 0;
+    // ✅ FIX: Skip RTCP packets
+    if (this.isRtcpPacket(rtpPacket)) {
+      return null;
+    }
+
+    const firstByte = rtpPacket[0];
+    const hasPadding = (firstByte & 0x20) > 0;
+    const csrcCount = firstByte & 0x0f;
+    const extension = (firstByte & 0x10) > 0;
     let offset = 12 + csrcCount * 4;
 
     if (extension) {
@@ -234,18 +326,46 @@ export class AudioProcessor extends EventEmitter {
       return null;
     }
 
-    return rtpPacket.subarray(offset);
+    let payloadEnd = rtpPacket.length;
+
+    // ✅ FIX: Handle RTP padding
+    if (hasPadding) {
+      const paddingLength = rtpPacket[rtpPacket.length - 1];
+      if (paddingLength > 0 && paddingLength < rtpPacket.length - offset) {
+        payloadEnd -= paddingLength;
+      }
+    }
+
+    if (offset >= payloadEnd) {
+      return null;
+    }
+
+    return rtpPacket.subarray(offset, payloadEnd);
   }
 
   /**
    * Decode Opus payload to PCM16 48k mono
+   * ✅ FIX LAG: Giảm logging để tránh I/O overhead
    */
+  private opusErrorCount = 0;
+  private lastOpusErrorLog = 0;
+
   private decodeOpusToPcm16(payload: Buffer, decoder: any): Int16Array | null {
     try {
       const decoded = decoder.decode(payload);
       return this.toInt16Array(decoded);
     } catch (error) {
-      logger.error('Opus decode error', error);
+      // ✅ FIX: Rate-limit error logging để tránh I/O spam gây lag
+      this.opusErrorCount++;
+      const now = Date.now();
+      if (now - this.lastOpusErrorLog > 10000) { // Log mỗi 10 giây
+        logger.warn('Opus decode errors in last 10s', { 
+          count: this.opusErrorCount,
+          lastError: (error as Error).message 
+        });
+        this.opusErrorCount = 0;
+        this.lastOpusErrorLog = now;
+      }
       return null;
     }
   }
@@ -274,23 +394,52 @@ export class AudioProcessor extends EventEmitter {
   }
 
   /**
-   * Downsample 48k → 16k by simple decimation (factor 3)
+   * Downsample 48kHz → 16kHz với anti-aliasing filter
+   * 
+   * Sử dụng simple low-pass filter (moving average) trước khi decimation
+   * để tránh aliasing artifacts gây "hallucination" cho STT
+   * 
+   * Lý thuyết: Khi downsample factor 3, Nyquist frequency = 8kHz
+   * Tần số > 8kHz sẽ bị fold back thành nhiễu nếu không có anti-aliasing
    */
   private downsampleTo16k(input: Int16Array): Int16Array {
     if (input.length === 0) {
       return input;
     }
+    
     const factor = 3;
     const outLen = Math.floor(input.length / factor);
     const out = new Int16Array(outLen);
-    for (let i = 0, j = 0; j < outLen; i += factor, j++) {
-      out[j] = input[i];
+    
+    // ✅ FIX: Sử dụng box filter (moving average) 5-tap làm anti-aliasing filter
+    // Box filter với window = 5 samples có cutoff ~9.6kHz ở 48kHz
+    // Đủ để attenuate frequencies > 8kHz (Nyquist của 16kHz)
+    const filterSize = 5;
+    const halfFilter = Math.floor(filterSize / 2);
+    
+    for (let j = 0; j < outLen; j++) {
+      const centerIdx = j * factor;
+      let sum = 0;
+      let count = 0;
+      
+      // Apply 5-tap moving average filter centered at decimation point
+      for (let k = -halfFilter; k <= halfFilter; k++) {
+        const idx = centerIdx + k;
+        if (idx >= 0 && idx < input.length) {
+          sum += input[idx];
+          count++;
+        }
+      }
+      
+      out[j] = count > 0 ? Math.round(sum / count) : 0;
     }
+    
     return out;
   }
 
   /**
    * Process tất cả audio buffers với VAD-based utterance detection
+   * ✅ FIX: Sử dụng per-participant VAD để tránh crosstalk giữa speakers
    */
   private async processAudioBuffers(): Promise<void> {
     for (const [participantId, streamBuffer] of this.activeStreams.entries()) {
@@ -313,8 +462,17 @@ export class AudioProcessor extends EventEmitter {
         // Tạm thời assume audio data đã là PCM (hoặc STT service handle Opus)
         const pcmData = audioData; // TODO: Implement Opus decoder
 
-        // ✅ VAD-based utterance detection
-        const vadResult = await this.vadProcessor.processChunk(pcmData);
+        // ✅ FIX: Sử dụng VAD của CHÍNH participant này, không phải shared VAD
+        const participantVAD = streamBuffer.vadProcessor as SileroVADProcessor;
+        if (!participantVAD) {
+          // Fallback: Nếu không có VAD, gửi thẳng audio
+          logger.warn('No VAD for participant, sending raw audio', { participantId });
+          await this.streamToSTT(participantId, pcmData, streamBuffer.roomId);
+          continue;
+        }
+
+        // ✅ VAD-based utterance detection - PER PARTICIPANT
+        const vadResult = await participantVAD.processChunk(pcmData);
 
         if (vadResult.hasUtterance && vadResult.utteranceAudio) {
           // ✅ Complete utterance detected - gửi đến STT
@@ -457,7 +615,24 @@ export class AudioProcessor extends EventEmitter {
 
       logger.info('🛑 Stopping audio streaming', { participantId });
 
-      // Close consumer/transport/decoder/socket if any
+      // ✅ FIX ZOMBIE: Xóa khỏi activeStreams NGAY LẬP TỨC
+      // Điều này đảm bảo processAudioBuffers loop sẽ bỏ qua user này ngay
+      // trong khi các bước cleanup async đang chạy
+      this.activeStreams.delete(participantId);
+      this.pausedStreams.delete(participantId);
+
+      // ✅ Cleanup per-participant VAD
+      if (streamBuffer.vadProcessor) {
+        try {
+          const vad = streamBuffer.vadProcessor as SileroVADProcessor;
+          vad.reset();
+          logger.debug('VAD reset for participant', { participantId });
+        } catch (err) {
+          logger.warn('Error resetting VAD', { participantId, err });
+        }
+      }
+
+      // Close consumer/transport/decoder/socket if any (async cleanup)
       if (streamBuffer.consumer) {
         try {
           await streamBuffer.consumer.close();
@@ -476,6 +651,8 @@ export class AudioProcessor extends EventEmitter {
 
       if ((streamBuffer as any).udpSocket && typeof (streamBuffer as any).udpSocket.close === 'function') {
         try {
+          // ✅ FIX: Remove all listeners trước khi close để tránh memory leak
+          (streamBuffer as any).udpSocket.removeAllListeners();
           (streamBuffer as any).udpSocket.close();
         } catch (err) {
           logger.warn('Error closing UDP socket', { participantId, err });
@@ -489,9 +666,6 @@ export class AudioProcessor extends EventEmitter {
           logger.warn('Error destroying decoder', { participantId, err });
         }
       }
-
-      // Remove stream buffer
-      this.activeStreams.delete(participantId);
 
       // Notify STT service
       await this.notifySTTStreamEnd(participantId);

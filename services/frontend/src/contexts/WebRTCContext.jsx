@@ -2,6 +2,8 @@ import { createContext, useContext, useState, useRef, useCallback, useEffect } f
 import io from 'socket.io-client';
 import { Device } from 'mediasoup-client';
 import ENV from '../config/env';
+// ❌ DISABLED: Echo Suppression - Root cause was shared VAD on Gateway
+// import remoteAudioMonitorService from '../services/RemoteAudioMonitorService';
 
 /**
  * WebRTC Context - MediaSoup SFU Architecture
@@ -37,6 +39,46 @@ export const WebRTCProvider = ({ children }) => {
   const [roomId, setRoomId] = useState(null);
   const [userId, setUserId] = useState(null);
   const [participantId, setParticipantId] = useState(null);
+
+  // Echo Suppression State (DISABLED - Root cause was shared VAD on Gateway)
+  // const [isRemoteSpeaking, setIsRemoteSpeaking] = useState(false);
+  const [userAudioEnabled, setUserAudioEnabled] = useState(true);
+
+  // ❌ DISABLED: Echo Suppression không cần thiết sau khi fix per-participant VAD
+  // Start Remote Monitor
+  // useEffect(() => {
+  //   remoteAudioMonitorService.start((isSpeaking) => {
+  //     setIsRemoteSpeaking(isSpeaking);
+  //   });
+  //   return () => remoteAudioMonitorService.stop();
+  // }, []);
+
+  // ❌ DISABLED: Soft Mute Logic gây ra vấn đề không thể barge-in
+  // Soft Mute Logic (Echo Suppression)
+  // useEffect(() => {
+  //   if (!localStream) return;
+  //   const audioTrack = localStream.getAudioTracks()[0];
+  //   if (!audioTrack) return;
+  //
+  //   // Logic: Enable mic ONLY if User wants it AND Remote is NOT speaking
+  //   // This allows Soft Mute (sending silence) when remote speaks to prevent echo
+  //   // The Gateway receives silence, so STT doesn't pick up echo.
+  //   const shouldEnable = userAudioEnabled && !isRemoteSpeaking;
+  //
+  //   if (audioTrack.enabled !== shouldEnable) {
+  //     audioTrack.enabled = shouldEnable;
+  //
+  //     // Only log if it's an automatic suppressed event (User enabled but system disabled)
+  //     if (userAudioEnabled && !shouldEnable) {
+  //       console.log('🔇 Echo Suppression: Soft Muting Microphone');
+  //     } else if (userAudioEnabled && shouldEnable && isRemoteSpeaking === false) {
+  //       // Logic check: if we are here, isRemoteSpeaking just became false
+  //       console.log('🔊 Echo Suppression: Unmuting Microphone');
+  //     }
+  //   }
+  // }, [localStream, userAudioEnabled, isRemoteSpeaking]);
+
+
 
   // ==========================================
   // MEDIASOUP STATE
@@ -81,12 +123,14 @@ export const WebRTCProvider = ({ children }) => {
   const [targetLanguage, setTargetLanguage] = useState('en');
   const [transcriptions, setTranscriptions] = useState([]);
   const [translatedAudioQueue, setTranslatedAudioQueue] = useState([]);
+  // 🔥 NEW: Lưu translations đã được Gateway xử lý sẵn (tránh duplicate API call)
+  const [serverTranslations, setServerTranslations] = useState(new Map()); // key: `${participantId}-${timestamp}` → translatedText
   const setupLocalTranslationRef = useRef(false);
 
   // Update language settings to server when changed
   useEffect(() => {
     if (!socket || !isConnected) return;
-    
+
     console.log('🌐 Syncing language settings to server:', { sourceLanguage, targetLanguage });
     socket.emit('update-language', {
       sourceLanguage,
@@ -209,13 +253,18 @@ export const WebRTCProvider = ({ children }) => {
         newMap.delete(remotePId);
         return newMap;
       });
+
+      // ❌ DISABLED: Echo Suppression - Root cause was shared VAD on Gateway
+      // remoteAudioMonitorService.untrackStream(remotePId);
     });
 
     // Transcription (captions) - legacy; khi USE_GATEWAY_ASR=true chỉ bỏ qua nếu source rõ ràng KHÔNG phải gateway.
     // Các event cũ không có field `source` vẫn được chấp nhận để tương thích với gateway image cũ.
     socket.on('transcription', (data) => {
-      if (USE_GATEWAY_ASR && data?.source && data.source !== 'gateway') {
-        return; // có source nhưng không phải gateway → bỏ qua
+      // Nếu dùng Gateway ASR (mode mới), bỏ qua hoàn toàn legacy event để tránh duplicate
+      // Gateway đã gửi event 'gateway-caption' rồi.
+      if (USE_GATEWAY_ASR) {
+        return;
       }
       const { participantId: remotePId, type, text, language, timestamp, isFinal } = data;
 
@@ -234,6 +283,18 @@ export const WebRTCProvider = ({ children }) => {
     // Gateway caption (new event)
     socket.on('gateway-caption', (data) => {
       const { speakerId, text, language, isFinal, timestamp, seq } = data;
+
+      // 🔍 DEBUG: Log để xác định caption của ai
+      // Lấy myParticipantId từ closure hoặc từ socket data
+      const myPId = socket._myParticipantId; // Sẽ set sau khi join room
+      const isMyCaption = speakerId === myPId;
+
+      if (isMyCaption) {
+        console.log(`🎤 [MY CAPTION] seq=${seq} text="${text}" lang=${language}`);
+      } else {
+        console.log(`👤 [OTHER] ${speakerId.slice(-8)} seq=${seq} text="${text}" lang=${language}`);
+      }
+
       setTranscriptions(prev => [...prev, {
         id: `${speakerId}-${timestamp || Date.now()}-${seq}`,
         participantId: speakerId,
@@ -248,6 +309,40 @@ export const WebRTCProvider = ({ children }) => {
 
     socket.on('caption-status', (data) => {
       console.warn('Caption status event', data);
+    });
+
+    // 🔥 NEW: Gateway translation event (pre-translated text từ server)
+    // Lưu lại để TranslationContext sử dụng thay vì gọi Translation API lại
+    socket.on('translation', (data) => {
+      const { participantId, originalText, translatedText, sourceLanguage, targetLanguage, timestamp } = data;
+
+      // Chỉ lưu translation nếu targetLanguage match với user's target
+      // (Gateway broadcast cho tất cả target languages)
+      console.log('📥 Received server translation:', {
+        participantId,
+        originalText: originalText?.substring(0, 30) + '...',
+        translatedText: translatedText?.substring(0, 30) + '...',
+        targetLanguage
+      });
+
+      // Store với key để TranslationContext có thể lookup
+      const key = `${participantId}-${originalText?.trim()}`;
+      setServerTranslations(prev => {
+        const newMap = new Map(prev);
+        // Lưu theo cả key text và targetLanguage
+        newMap.set(`${key}-${targetLanguage}`, {
+          translatedText,
+          sourceLanguage,
+          targetLanguage,
+          timestamp: timestamp || Date.now()
+        });
+        // Cleanup old entries (keep last 50)
+        if (newMap.size > 50) {
+          const entries = Array.from(newMap.entries());
+          return new Map(entries.slice(-50));
+        }
+        return newMap;
+      });
     });
 
     // Translated audio
@@ -268,6 +363,7 @@ export const WebRTCProvider = ({ children }) => {
       socket.off('participant-joined');
       socket.off('participant-left');
       socket.off('transcription');
+      socket.off('translation');
       socket.off('translated-audio');
       socket.off('chat-message');
     };
@@ -357,7 +453,7 @@ export const WebRTCProvider = ({ children }) => {
 
       sendTransport.on('produce', async ({ kind, rtpParameters, appData }, callback, errback) => {
         try {
-          const { id } = await new Promise((resolve, reject) => {
+          const { producerId } = await new Promise((resolve, reject) => {
             socket.emit('produce', {
               transportId: sendTransport.id,
               kind,
@@ -371,7 +467,8 @@ export const WebRTCProvider = ({ children }) => {
               }
             });
           });
-          callback({ id });
+          console.log(`📡 Producer ID received from Gateway:`, producerId);
+          callback({ id: producerId });
         } catch (error) {
           errback(error);
         }
@@ -454,7 +551,12 @@ export const WebRTCProvider = ({ children }) => {
         throw new Error('Send transport not created');
       }
 
-      console.log(`🎥 Producing ${track.kind} track...`);
+      console.log(`🎥 Producing ${track.kind} track...`, {
+        trackId: track.id,
+        enabled: track.enabled,
+        muted: track.muted,
+        readyState: track.readyState
+      });
 
       const producer = await sendTransport.produce({
         track,
@@ -462,6 +564,14 @@ export const WebRTCProvider = ({ children }) => {
       });
 
       producersRef.current.set(track.kind, producer);
+
+      // 🔍 DEBUG: Log chi tiết producer
+      console.log(`✅ ${track.kind} producer created:`, {
+        producerId: producer.id,
+        kind: producer.kind,
+        paused: producer.paused,
+        closed: producer.closed
+      });
 
       producer.on('trackended', () => {
         console.log(`🛑 ${track.kind} track ended`);
@@ -574,6 +684,9 @@ export const WebRTCProvider = ({ children }) => {
         return newMap;
       });
 
+      // ❌ DISABLED: Echo Suppression - Root cause was shared VAD on Gateway
+      // remoteAudioMonitorService.trackStream(remotePId, stream);
+
       // Translation setup moved to RoomMeet level to avoid circular dependency
     }
   }, []);
@@ -620,13 +733,48 @@ export const WebRTCProvider = ({ children }) => {
     if (localStreamRef.current) {
       const audioTrack = localStreamRef.current.getAudioTracks()[0];
       if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled;
-        console.log('🎤 Audio:', audioTrack.enabled ? 'ON' : 'OFF');
-        return audioTrack.enabled;
+        // Toggle User Intention State
+        const newState = !userAudioEnabled;
+        setUserAudioEnabled(newState);
+
+        // Note: We DO NOT toggle audioTrack.enabled here physically for the state.
+        // We let the Echo Suppression useEffect handle the track.enabled property.
+        // However, we DO need to notify Gateway about "Producer Pause" if the USER strictly wants to mute.
+        // If it's just Echo Suppression, we don't pause producer (we send silence).
+
+        // 🔇 Notify Gateway về pause/resume producer (User Action)
+        const audioProducer = producersRef.current.get('audio');
+        if (audioProducer && socket) {
+          const producerId = audioProducer.id;
+          if (producerId) {
+            if (newState) {
+              // User Unmute -> Resume producer
+              socket.emit('resume-producer', { producerId }, (response) => {
+                if (response?.error) {
+                  console.error('❌ Failed to resume producer:', response.error);
+                } else {
+                  console.log('🔊 Audio producer resumed on Gateway');
+                }
+              });
+            } else {
+              // User Mute -> Pause producer
+              socket.emit('pause-producer', { producerId }, (response) => {
+                if (response?.error) {
+                  console.error('❌ Failed to pause producer:', response.error);
+                } else {
+                  console.log('🔇 Audio producer paused on Gateway');
+                }
+              });
+            }
+          }
+        }
+
+        console.log('🎤 Audio User State:', newState ? 'ON' : 'OFF');
+        return newState;
       }
     }
     return false;
-  }, []);
+  }, [userAudioEnabled, socket]);
 
   const toggleVideo = useCallback(() => {
     if (localStreamRef.current) {
@@ -677,14 +825,24 @@ export const WebRTCProvider = ({ children }) => {
       // 1. Get local media first
       const stream = await getLocalStream();
 
+      // 🔧 FIX: Ưu tiên language từ userInfo (passed from RoomMeet), fallback về state
+      const effectiveSourceLang = userInfo.sourceLanguage || sourceLanguage;
+      const effectiveTargetLang = userInfo.targetLanguage || targetLanguage;
+
+      console.log('🌐 Join room with languages:', {
+        sourceLanguage: effectiveSourceLang,
+        targetLanguage: effectiveTargetLang,
+        fromUserInfo: !!userInfo.sourceLanguage
+      });
+
       // 2. Join room on server (nhận rtpCapabilities trong response)
       const joinResponse = await new Promise((resolve, reject) => {
         socket.emit('join-room', {
           roomId: roomIdToJoin,
           name: userInfo.userId || userId,
           userid: userInfo.userId || userId,
-          sourceLanguage: sourceLanguage,
-          targetLanguage: targetLanguage
+          sourceLanguage: effectiveSourceLang,
+          targetLanguage: effectiveTargetLang
         }, (response) => {
           if (response.error) {
             reject(new Error(response.error.message));
@@ -696,10 +854,28 @@ export const WebRTCProvider = ({ children }) => {
 
       const { participantId: myPId, participants: existingParticipants, rtpCapabilities } = joinResponse;
 
+      // Update participants state with existing participants
+      if (existingParticipants && existingParticipants.length > 0) {
+        setParticipants(prev => {
+          const newMap = new Map(prev);
+          existingParticipants.forEach(p => {
+            newMap.set(p.id, {
+              name: p.name,
+              sourceLanguage: p.sourceLanguage,
+              targetLanguage: p.targetLanguage
+            });
+          });
+          return newMap;
+        });
+      }
+
       // 3. Load device with rtpCapabilities from join response
       await loadDevice(rtpCapabilities);
       setRoomId(roomIdToJoin);
       setParticipantId(myPId);
+
+      // 🔍 DEBUG: Store myParticipantId on socket for caption filtering
+      socket._myParticipantId = myPId;
 
       console.log('✅ Joined room:', roomIdToJoin, 'as', myPId);
 
@@ -834,6 +1010,7 @@ export const WebRTCProvider = ({ children }) => {
     setTargetLanguage,
     transcriptions,
     translatedAudioQueue,
+    serverTranslations, // 🔥 Pre-translated text từ Gateway
   };
 
   return (

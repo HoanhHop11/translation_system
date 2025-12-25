@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { authAPI } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
+import Logo from '../assets/JBCalling_Web_Teal.svg'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -41,6 +42,7 @@ export default function Login() {
   return (
     <div className="auth-container">
       <form className="auth-form" onSubmit={handleSubmit}>
+        <img src={Logo} alt="JB Calling Logo" className="auth-logo" />
         <h2>Đăng Nhập</h2>
         
         {error && <div className="error-message">{error}</div>}

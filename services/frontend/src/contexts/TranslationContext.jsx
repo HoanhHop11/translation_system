@@ -19,6 +19,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import audioExtractionService from '../services/AudioExtractionService';
 import ttsPlaybackService from '../services/TTSPlaybackService';
+import localVADService from '../services/LocalVADService';
 import { useToast } from './ToastContext';
 import { useWebRTC } from './WebRTCContext'; // ✅ Restore import
 import { ENV } from '../config/env';
@@ -27,6 +28,12 @@ const TranslationContext = createContext();
 
 // Feature flag: use Gateway ASR captions for remote participants (skip remote STT)
 const USE_GATEWAY_ASR = true;
+
+// 🔥 Feature flag: Barge-In - ngắt TTS khi local user bắt đầu nói
+const ENABLE_BARGE_IN = true;
+
+// 🔥 Feature flag: Ưu tiên sử dụng translation từ Gateway thay vì gọi API lại
+const USE_SERVER_TRANSLATIONS = true;
 
 // Convert PCM Int16Array to base64 for streaming STT API
 const pcm16ToBase64 = (pcmData) => {
@@ -60,6 +67,9 @@ export const TranslationProvider = ({ children }) => {
   // Global language settings
   const [myLanguage, setMyLanguage] = useState('vi'); // User's language
   const [targetLanguage, setTargetLanguage] = useState('en'); // Translation target
+  
+  // 🔥 Auto-TTS: Track if user manually toggled TTS (overrides auto logic)
+  const ttsManualOverrideRef = useRef(false);
   
   // Refs for accessing latest state in callbacks/closures
   const myLanguageRef = useRef(myLanguage);
@@ -111,8 +121,24 @@ export const TranslationProvider = ({ children }) => {
   // Deduplication by content (fix for duplicate events with different IDs)
   const lastProcessedCaptionRef = useRef(new Map()); // participantId -> { text, timestamp }
 
+  // 🔥 NEW: Track remote audio mute state per participant
+  const remoteAudioMuteRef = useRef(new Map()); // participantId -> { wasEnabled, audioTrack }
+  
+  // 🔥 Ref để access remoteStreams mới nhất trong callbacks (sẽ được set sau useWebRTC)
+  const remoteStreamsRef = useRef(new Map());
+
   const { showToast } = useToast();
-  const { participantId: myParticipantId, localStream } = useWebRTC(); // ✅ Access participant + local audio track for TTS-safe mode
+  // 🔥 Lấy thêm serverTranslations và remoteStreams để control remote audio
+  const { 
+    participantId: myParticipantId, 
+    localStream,
+    remoteStreams, // Để access remote audio tracks
+    serverTranslations, // Pre-translated text từ Gateway
+    participants // Để biết language của remote participants
+  } = useWebRTC();
+  
+  // 🔥 Keep ref updated với remoteStreams mới nhất - LUÔN sync
+  remoteStreamsRef.current = remoteStreams;
 
   // Service URLs (use centralized ENV config)
   const STT_SERVICE_URL = ENV.STT_SERVICE_URL;
@@ -146,9 +172,11 @@ export const TranslationProvider = ({ children }) => {
   }, [enabled, myLanguage, targetLanguage, showToast]);
 
   /**
-   * Toggle TTS playback
+   * Toggle TTS playback (internal implementation)
+   * 🔥 Mute/unmute được xử lý bởi useEffect [remoteStreams, ttsEnabled] để đảm bảo sync
+   * @param isManual - true nếu user toggle thủ công (override auto logic)
    */
-  const toggleTTS = useCallback((value) => {
+  const toggleTTSInternal = useCallback((value, isManual = false) => {
     const newTtsEnabled = value !== undefined ? value : !ttsEnabled;
 
     // Avoid double toggles from repeated clicks/rerenders
@@ -156,18 +184,36 @@ export const TranslationProvider = ({ children }) => {
       return;
     }
 
-    setTtsEnabled(newTtsEnabled);
+    // 🔥 Mark manual override if user toggled manually
+    if (isManual) {
+      ttsManualOverrideRef.current = true;
+      console.log('🎚️ [Auto-TTS] Manual override set - auto-TTS disabled');
+    }
 
     if (newTtsEnabled) {
-      showToast('TTS playback enabled', 'success');
-      console.log('🔊 TTS playback enabled');
+      showToast('Live Translation enabled - Remote audio muted', 'success');
+      console.log('🔊 TTS playback enabled', isManual ? '(manual)' : '(auto)');
     } else {
-      showToast('TTS playback disabled - Caption only mode', 'info');
-      console.log('🔇 TTS playback disabled');
+      showToast('Live Translation disabled - Original audio restored', 'info');
+      console.log('🔇 TTS playback disabled', isManual ? '(manual)' : '(auto)');
+      
       // Stop current playback
       ttsPlaybackService.stopAll();
+      
+      // Clear mute state tracking
+      remoteAudioMuteRef.current.clear();
     }
+
+    // 🔥 Set state - useEffect [remoteStreams, ttsEnabled] sẽ handle mute/unmute
+    setTtsEnabled(newTtsEnabled);
   }, [ttsEnabled, showToast]);
+
+  /**
+   * Toggle TTS playback (public API - marks as manual override)
+   */
+  const toggleTTS = useCallback((value) => {
+    toggleTTSInternal(value, true);
+  }, [toggleTTSInternal]);
 
   /**
    * Setup translation cho một participant
@@ -552,41 +598,80 @@ export const TranslationProvider = ({ children }) => {
   };
 
   /**
-   * TTS-safe helpers: mute local mic while translated audio is playing
+   * TTS-safe helpers: DISABLED - không mute local mic nữa
+   * Lý do: Barge-In đã xử lý việc ngắt TTS khi user nói
+   * Mute mic gây ra vấn đề: User không thể nói khi TTS đang phát
    */
   const handleTTSAudioStart = () => {
-    const guard = ttsMicGuardRef.current;
-    const audioTrack = localStream?.getAudioTracks?.()[0];
-    if (!audioTrack) {
-      return;
-    }
-
-    if (guard.depth === 0) {
-      // Save current mic state and mute if it was enabled
-      guard.micWasEnabled = audioTrack.enabled;
-      if (audioTrack.enabled) {
-        audioTrack.enabled = false;
-        console.log('🔇 TTS-safe: muting local mic during TTS playback');
-      }
-    }
-    guard.depth += 1;
+    // 🔥 DISABLED: Không mute mic nữa - Barge-In sẽ xử lý
+    // Việc mute mic khiến user không thể nói khi TTS đang phát
+    // và Gateway không nhận được audio → không có caption
+    console.log('🔊 TTS playback started (mic NOT muted - Barge-In enabled)');
   };
 
   const handleTTSAudioEnd = () => {
-    const guard = ttsMicGuardRef.current;
-    const audioTrack = localStream?.getAudioTracks?.()[0];
-
-    if (guard.depth > 0) {
-      guard.depth -= 1;
-    }
-
-    if (guard.depth === 0 && guard.micWasEnabled && audioTrack) {
-      // Only restore if mic was originally enabled
-      audioTrack.enabled = true;
-      console.log('🎤 TTS-safe: restoring local mic after TTS playback');
-      guard.micWasEnabled = null;
-    }
+    // 🔥 DISABLED: Không cần restore mic vì không mute
+    console.log('🔊 TTS playback ended');
   };
+
+  /**
+   * 🔥 NEW: Mute remote audio track khi TTS đang phát
+   * Logic kiểm tra ngôn ngữ đã được xử lý ở ingestGatewayCaption
+   */
+  const muteRemoteAudio = useCallback((speakerId) => {
+    // 🔥 Dùng ref để có giá trị mới nhất
+    const remoteStream = remoteStreamsRef.current?.get?.(speakerId);
+    if (!remoteStream) {
+      console.log(`⚠️ No remote stream found for ${speakerId}`);
+      return false;
+    }
+
+    const audioTrack = remoteStream.getAudioTracks()?.[0];
+    if (!audioTrack) {
+      console.log(`⚠️ No audio track found for ${speakerId}`);
+      return false;
+    }
+
+    // Lưu trạng thái và mute
+    const muteState = remoteAudioMuteRef.current.get(speakerId) || { depth: 0, wasEnabled: null };
+    
+    if (muteState.depth === 0) {
+      muteState.wasEnabled = audioTrack.enabled;
+      if (audioTrack.enabled) {
+        audioTrack.enabled = false;
+        console.log(`🔇 Muting remote audio for ${speakerId}`);
+      }
+    }
+    muteState.depth += 1;
+    remoteAudioMuteRef.current.set(speakerId, muteState);
+    
+    return true; // Đã mute
+  }, []); // Không cần dependency vì dùng ref
+
+  /**
+   * 🔥 NEW: Restore remote audio track sau khi TTS phát xong
+   */
+  const unmuteRemoteAudio = useCallback((speakerId) => {
+    const muteState = remoteAudioMuteRef.current.get(speakerId);
+    if (!muteState) return;
+
+    if (muteState.depth > 0) {
+      muteState.depth -= 1;
+    }
+
+    if (muteState.depth === 0 && muteState.wasEnabled !== null) {
+      // 🔥 Dùng ref để có giá trị mới nhất
+      const remoteStream = remoteStreamsRef.current?.get?.(speakerId);
+      const audioTrack = remoteStream?.getAudioTracks()?.[0];
+      
+      if (audioTrack && muteState.wasEnabled) {
+        audioTrack.enabled = true;
+        console.log(`🔊 Restoring remote audio for ${speakerId}`);
+      }
+      
+      remoteAudioMuteRef.current.delete(speakerId);
+    }
+  }, []); // Không cần dependency vì dùng ref
 
   /**
    * Transcribe audio với STT service
@@ -788,7 +873,29 @@ export const TranslationProvider = ({ children }) => {
   }, []);
 
   /**
+   * 🔥 Helper: Check xem Gateway đã gửi translation cho text này chưa
+   * Nếu có thì dùng luôn, không cần gọi Translation API
+   */
+  const getServerTranslation = useCallback((participantId, text, tgtLang) => {
+    if (!USE_SERVER_TRANSLATIONS || !serverTranslations) return null;
+    
+    const key = `${participantId}-${text?.trim()}-${tgtLang}`;
+    const cached = serverTranslations.get(key);
+    
+    if (cached && cached.translatedText) {
+      console.log('✅ Using server-side translation (no duplicate API call):', {
+        key: key.substring(0, 50) + '...',
+        translatedText: cached.translatedText.substring(0, 30) + '...'
+      });
+      return cached.translatedText;
+    }
+    
+    return null;
+  }, [serverTranslations]);
+
+  /**
    * Ingest caption từ Gateway (ASR server) và chạy MT/TTS per-viewer
+   * 🔥 OPTIMIZED: Check serverTranslations trước khi gọi Translation API
    */
   const ingestGatewayCaption = useCallback(async (caption) => {
     try {
@@ -830,16 +937,33 @@ export const TranslationProvider = ({ children }) => {
       const normalizedText = normalizeCapitalization(caption.text.trim());
       const sourceLanguage = caption.language || 'auto';
 
-      // Translate nếu bật
-      const translated = await translateText(normalizedText, sourceLanguage, targetLanguage);
+      // 🔥 LOGIC FIX: 
+      // - Remote speaker nói ngôn ngữ X (sourceLanguage từ caption)
+      // - User muốn nghe bằng ngôn ngữ của mình (myLanguage)
+      // - Dịch: sourceLanguage → myLanguage
+      // - TTS phát bằng: myLanguage
+      const userLanguage = myLanguageRef.current || myLanguage || 'vi';
+      
+      // Check xem Gateway đã translate chưa (dùng myLanguage làm target)
+      let translated = getServerTranslation(speakerKey, caption.text.trim(), userLanguage);
+      
+      if (!translated) {
+        // Fallback: Gọi Translation API - dịch từ source → user's language
+        console.log(`⚡ No server translation found, translating ${sourceLanguage} → ${userLanguage}...`);
+        translated = await translateText(normalizedText, sourceLanguage, userLanguage);
+      }
 
       // TTS nếu bật và không phải self
+      // 🔊 Logic đơn giản: Khi TTS bật → remote audio đã mute → phát TTS bằng ngôn ngữ của user
       if (ttsEnabled && caption.speakerId && caption.speakerId !== myParticipantId) {
-        const audioBase64 = await synthesizeSpeech(translated, targetLanguage);
+        console.log(`🎤 TTS enabled, playing translated audio in ${userLanguage} for ${caption.speakerId}`);
+        
+        // TTS phát bằng ngôn ngữ của USER (myLanguage), không phải targetLanguage
+        const audioBase64 = await synthesizeSpeech(translated, userLanguage);
         await ttsPlaybackService.playTranslatedAudio(caption.speakerId, audioBase64, {
           immediate: true,
           voice: ttsVoice,
-          lang: targetLanguage,
+          lang: userLanguage,
           onStart: () => handleTTSAudioStart(),
           onEnd: () => handleTTSAudioEnd()
         });
@@ -858,7 +982,7 @@ export const TranslationProvider = ({ children }) => {
     } catch (err) {
       console.error('❌ ingestGatewayCaption error:', err);
     }
-  }, [enabled, targetLanguage, ttsEnabled, myParticipantId]);
+  }, [enabled, myLanguage, ttsEnabled, myParticipantId, getServerTranslation]);
 
   /**
    * Get translation stats
@@ -875,11 +999,123 @@ export const TranslationProvider = ({ children }) => {
     };
   }, [enabled, participantSettings, captions, metrics]);
 
+  // 🔥 Barge-In: Start LocalVAD khi có localStream và translation enabled
+  // Khi local user nói, ngắt TTS đang phát (nếu có)
+  useEffect(() => {
+    if (!ENABLE_BARGE_IN || !enabled || !ttsEnabled || !localStream) {
+      localVADService.stop();
+      return;
+    }
+
+    // Start LocalVAD với callbacks
+    localVADService.start(localStream, {
+      onSpeechStart: () => {
+        // Barge-In: Ngắt TTS ngay lập tức khi local user nói
+        const wasPlaying = ttsPlaybackService.interruptForBargeIn(true);
+        
+        if (wasPlaying) {
+          console.log('🛑 [Barge-In] TTS interrupted - local user is speaking');
+          
+          // 🔥 Dùng ref để có giá trị mới nhất - Unmute remote audio cho tất cả participants
+          const currentRemoteStreams = remoteStreamsRef.current;
+          if (currentRemoteStreams) {
+            for (const [speakerId] of currentRemoteStreams) {
+              unmuteRemoteAudio(speakerId);
+            }
+          }
+        }
+      },
+      onSpeechEnd: () => {
+        console.log('🤐 [Barge-In] Local user stopped speaking');
+        // Không cần làm gì - pipeline tiếp tục bình thường
+      }
+    });
+
+    console.log('🎤 [Barge-In] LocalVAD started for local speech detection');
+
+    return () => {
+      localVADService.stop();
+      console.log('🎤 [Barge-In] LocalVAD stopped');
+    };
+  }, [enabled, ttsEnabled, localStream, unmuteRemoteAudio]);
+
+  // 🔥 Auto-TTS: Tự động bật/tắt TTS dựa trên language pair
+  // - Cùng ngôn ngữ: tắt TTS (không cần dịch)
+  // - Khác ngôn ngữ: bật TTS
+  // - Chỉ hoạt động khi user chưa toggle manual
+  useEffect(() => {
+    // Bỏ qua nếu user đã toggle manual hoặc không có participants
+    if (ttsManualOverrideRef.current || !participants || participants.size === 0) {
+      return;
+    }
+
+    // Kiểm tra ngôn ngữ của remote participants
+    let hasRemoteWithDifferentLanguage = false;
+    
+    for (const [remotePId, pData] of participants) {
+      // Skip local participant
+      if (remotePId === myParticipantId) continue;
+      
+      const remoteLanguage = pData.sourceLanguage || pData.targetLanguage;
+      
+      if (remoteLanguage && remoteLanguage !== myLanguage) {
+        hasRemoteWithDifferentLanguage = true;
+        break;
+      }
+    }
+
+    // Auto-toggle TTS based on language pair (không gọi toggleTTS để tránh mark manual override)
+    if (hasRemoteWithDifferentLanguage && !ttsEnabled) {
+      console.log('🔄 [Auto-TTS] Khác ngôn ngữ detected → Bật TTS');
+      toggleTTSInternal(true, false);
+    } else if (!hasRemoteWithDifferentLanguage && ttsEnabled) {
+      console.log('🔄 [Auto-TTS] Cùng ngôn ngữ detected → Tắt TTS');
+      toggleTTSInternal(false, false);
+    }
+  }, [myLanguage, myParticipantId, participants, ttsEnabled, toggleTTSInternal]);
+
+  // Reset manual override khi rời phòng hoặc participants thay đổi đáng kể
+  useEffect(() => {
+    if (!participants || participants.size === 0) {
+      // Reset manual override khi không còn ai trong room
+      ttsManualOverrideRef.current = false;
+      console.log('🔄 [Auto-TTS] Reset manual override (empty room)');
+    }
+  }, [participants]);
+
+  // 🔥 Auto-sync remote audio mute state với TTS enabled state
+  // Đảm bảo trạng thái mute LUÔN đúng theo ttsEnabled và remoteStreams hiện tại
+  // - TTS enabled (ttsEnabled=true) => remote audio muted (track.enabled=false)
+  // - TTS disabled (ttsEnabled=false) => remote audio unmuted (track.enabled=true)
+  useEffect(() => {
+    if (!remoteStreams || remoteStreams.size === 0) {
+      return;
+    }
+
+    // desiredEnabled = !ttsEnabled
+    // ttsEnabled=true => track should be disabled (muted)
+    // ttsEnabled=false => track should be enabled (unmuted)
+    const desiredTrackEnabled = !ttsEnabled;
+
+    for (const [participantId, stream] of remoteStreams.entries()) {
+      const audioTracks = stream?.getAudioTracks?.() || [];
+      for (const track of audioTracks) {
+        if (track.enabled !== desiredTrackEnabled) {
+          track.enabled = desiredTrackEnabled;
+          console.log(
+            `🔊 [Auto-Sync-Mute] ${participantId} track.enabled=${track.enabled} (ttsEnabled=${ttsEnabled})`
+          );
+        }
+      }
+    }
+  }, [remoteStreams, ttsEnabled]);
+
   // Cleanup khi unmount
   useEffect(() => {
     return () => {
       audioExtractionService.stopAll();
       ttsPlaybackService.stopAll();
+      localVADService.stop();
     };
   }, []);
 
@@ -912,7 +1148,11 @@ export const TranslationProvider = ({ children }) => {
 
     // Services (expose for advanced usage)
     audioExtractionService,
-    ttsPlaybackService
+    ttsPlaybackService,
+    localVADService,
+    
+    // Barge-In status
+    bargeInEnabled: ENABLE_BARGE_IN
   };
 
   return (

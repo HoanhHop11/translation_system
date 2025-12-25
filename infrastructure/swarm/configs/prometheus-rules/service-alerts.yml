@@ -1,0 +1,341 @@
+# ===========================================
+# Prometheus Alert Rules - Application Services
+# JBCalling Translation System - AI Pipeline
+# Updated: December 9, 2025
+# ===========================================
+
+groups:
+  - name: service-health
+    interval: 30s
+    rules:
+      # ===========================================
+      # Service Availability Alerts
+      # ===========================================
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Service {{ $labels.job }} ({{ $labels.instance }}) has been down for more than 1 minute."
+
+      - alert: ServiceHighLatency
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, job)) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High latency on {{ $labels.job }}"
+          description: "Service {{ $labels.job }} 95th percentile latency is {{ printf \"%.2f\" $value }}s"
+
+      - alert: ServiceHighErrorRate
+        expr: sum by(job) (rate(http_requests_total{status=~"5.."}[5m])) / sum by(job) (rate(http_requests_total[5m])) * 100 > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate on {{ $labels.job }}"
+          description: "Service {{ $labels.job }} has {{ printf \"%.2f\" $value }}% error rate"
+
+      - alert: ServiceCriticalErrorRate
+        expr: sum by(job) (rate(http_requests_total{status=~"5.."}[5m])) / sum by(job) (rate(http_requests_total[5m])) * 100 > 20
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical error rate on {{ $labels.job }}"
+          description: "Service {{ $labels.job }} has {{ printf \"%.2f\" $value }}% error rate"
+
+  - name: gateway-alerts
+    interval: 30s
+    rules:
+      # ===========================================
+      # WebRTC Gateway Alerts
+      # ===========================================
+      - alert: GatewayDown
+        expr: up{job="gateway"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: gateway
+        annotations:
+          summary: "WebRTC Gateway is down"
+          description: "The WebRTC Gateway service is not responding. Users cannot make video calls."
+
+      - alert: GatewayHighConnections
+        expr: gateway_active_connections > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: gateway
+        annotations:
+          summary: "High number of active connections on Gateway"
+          description: "Gateway has {{ $value }} active connections. Consider scaling."
+
+      - alert: GatewayWebRTCFailures
+        expr: rate(gateway_webrtc_connection_failures_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: gateway
+        annotations:
+          summary: "WebRTC connection failures detected"
+          description: "Gateway is experiencing WebRTC connection failures at {{ printf \"%.2f\" $value }}/sec"
+
+  - name: stt-alerts
+    interval: 30s
+    rules:
+      # ===========================================
+      # Speech-to-Text Service Alerts
+      # ===========================================
+      - alert: STTServiceDown
+        expr: up{job="stt"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: stt
+        annotations:
+          summary: "STT Service is down"
+          description: "Speech-to-Text service is not responding. Transcription is unavailable."
+
+      - alert: STTHighLatency
+        expr: histogram_quantile(0.95, sum(rate(stt_transcription_duration_seconds_bucket[5m])) by (le)) > 3
+        for: 5m
+        labels:
+          severity: warning
+          service: stt
+        annotations:
+          summary: "High STT transcription latency"
+          description: "95th percentile STT latency is {{ printf \"%.2f\" $value }}s (target: < 3s)"
+
+      - alert: STTCriticalLatency
+        expr: histogram_quantile(0.95, sum(rate(stt_transcription_duration_seconds_bucket[5m])) by (le)) > 5
+        for: 2m
+        labels:
+          severity: critical
+          service: stt
+        annotations:
+          summary: "Critical STT transcription latency"
+          description: "95th percentile STT latency is {{ printf \"%.2f\" $value }}s - severely impacting user experience"
+
+      - alert: STTModelLoadFailure
+        expr: stt_model_load_failures_total > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: stt
+        annotations:
+          summary: "STT model failed to load"
+          description: "The STT AI model failed to load. Service may not function correctly."
+
+  - name: translation-alerts
+    interval: 30s
+    rules:
+      # ===========================================
+      # Translation Service Alerts
+      # ===========================================
+      - alert: TranslationServiceDown
+        expr: up{job="translation"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: translation
+        annotations:
+          summary: "Translation Service is down"
+          description: "Translation service is not responding. Real-time translation is unavailable."
+
+      - alert: TranslationHighLatency
+        expr: histogram_quantile(0.95, sum(rate(translation_duration_seconds_bucket[5m])) by (le)) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: translation
+        annotations:
+          summary: "High translation latency"
+          description: "95th percentile translation latency is {{ printf \"%.2f\" $value }}s"
+
+      - alert: TranslationCacheHitRateLow
+        expr: rate(translation_cache_hits_total[5m]) / (rate(translation_cache_hits_total[5m]) + rate(translation_cache_misses_total[5m])) < 0.3
+        for: 10m
+        labels:
+          severity: warning
+          service: translation
+        annotations:
+          summary: "Low translation cache hit rate"
+          description: "Cache hit rate is {{ printf \"%.2f\" $value }}%. Consider adjusting cache settings."
+
+  # ===========================================
+  # TTS Service Alerts - Via Blackbox Exporter
+  # TTS service monitored via HTTP probe to /health endpoint
+  # ===========================================
+  - name: tts-alerts
+    interval: 30s
+    rules:
+      - alert: TTSServiceDown
+        expr: probe_success{job="tts"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: tts
+        annotations:
+          summary: "TTS Service is down"
+          description: "Text-to-Speech service at {{ $labels.instance }} is not responding. Voice synthesis is unavailable."
+
+      - alert: TTSServiceSlowResponse
+        expr: probe_duration_seconds{job="tts"} > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: tts
+        annotations:
+          summary: "TTS Service slow response"
+          description: "TTS service at {{ $labels.instance }} response time is {{ printf \"%.2f\" $value }}s"
+
+      - alert: TTSServiceUnhealthy
+        expr: probe_http_status_code{job="tts"} != 200
+        for: 2m
+        labels:
+          severity: warning
+          service: tts
+        annotations:
+          summary: "TTS Service unhealthy status"
+          description: "TTS service at {{ $labels.instance }} returned HTTP {{ $value }} instead of 200"
+
+  - name: redis-alerts
+    interval: 30s
+    rules:
+      # ===========================================
+      # Redis Cache Alerts
+      # ===========================================
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: redis
+        annotations:
+          summary: "Redis is down"
+          description: "Redis cache is not responding. This affects caching and session management."
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "High Redis memory usage"
+          description: "Redis is using {{ printf \"%.2f\" $value }}% of max memory"
+
+      - alert: RedisCriticalMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+          service: redis
+        annotations:
+          summary: "Critical Redis memory usage"
+          description: "Redis is using {{ printf \"%.2f\" $value }}% of max memory. Eviction may occur."
+
+      - alert: RedisHighConnections
+        expr: redis_connected_clients > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "High Redis connection count"
+          description: "Redis has {{ $value }} connected clients"
+
+  - name: traefik-alerts
+    interval: 30s
+    rules:
+      # ===========================================
+      # Traefik Reverse Proxy Alerts
+      # ===========================================
+      - alert: TraefikDown
+        expr: up{job="traefik"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: traefik
+        annotations:
+          summary: "Traefik is down"
+          description: "Traefik reverse proxy is not responding. All HTTP/HTTPS traffic is blocked."
+
+      - alert: TraefikHighErrorRate
+        expr: sum(rate(traefik_service_requests_total{code=~"5.."}[5m])) / sum(rate(traefik_service_requests_total[5m])) * 100 > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: traefik
+        annotations:
+          summary: "High error rate on Traefik"
+          description: "Traefik has {{ printf \"%.2f\" $value }}% 5xx error rate"
+
+      - alert: TraefikCertificateExpiringSoon
+        expr: (traefik_tls_certs_not_after - time()) / 86400 < 14
+        for: 1h
+        labels:
+          severity: warning
+          service: traefik
+        annotations:
+          summary: "TLS certificate expiring soon"
+          description: "Certificate for {{ $labels.cn }} expires in {{ printf \"%.0f\" $value }} days"
+
+  # ===========================================
+  # External Endpoints Monitoring - Via Blackbox
+  # ===========================================
+  - name: external-alerts
+    interval: 60s
+    rules:
+      - alert: ExternalEndpointDown
+        expr: probe_success{job="blackbox-external"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: external
+        annotations:
+          summary: "External endpoint {{ $labels.instance }} is down"
+          description: "The external endpoint {{ $labels.instance }} has been unreachable for more than 2 minutes."
+
+      - alert: ExternalEndpointSlowResponse
+        expr: probe_duration_seconds{job="blackbox-external"} > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: external
+        annotations:
+          summary: "Slow response from {{ $labels.instance }}"
+          description: "External endpoint {{ $labels.instance }} response time is {{ printf \"%.2f\" $value }}s"
+
+      - alert: SSLCertificateExpiringSoon
+        expr: (probe_ssl_earliest_cert_expiry{job="blackbox-external"} - time()) / 86400 < 14
+        for: 1h
+        labels:
+          severity: warning
+          service: ssl
+        annotations:
+          summary: "SSL certificate expiring soon for {{ $labels.instance }}"
+          description: "SSL certificate for {{ $labels.instance }} expires in {{ printf \"%.0f\" $value }} days"
+
+      - alert: SSLCertificateExpired
+        expr: (probe_ssl_earliest_cert_expiry{job="blackbox-external"} - time()) < 0
+        for: 0m
+        labels:
+          severity: critical
+          service: ssl
+        annotations:
+          summary: "SSL certificate EXPIRED for {{ $labels.instance }}"
+          description: "SSL certificate for {{ $labels.instance }} has expired!"
+
+      - alert: TraefikCertificateExpiryCritical
+        expr: (traefik_tls_certs_not_after - time()) / 86400 < 7
+        for: 1h
+        labels:
+          severity: critical
+          service: traefik
+        annotations:
+          summary: "TLS certificate expiring very soon!"
+          description: "Certificate for {{ $labels.cn }} expires in {{ printf \"%.0f\" $value }} days. Renew immediately!"

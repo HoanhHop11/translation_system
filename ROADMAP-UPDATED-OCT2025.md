@@ -1,7 +1,11 @@
-# 🗺️ ROADMAP CẬP NHẬT - NOVEMBER 2025
+# 🗺️ ROADMAP CẬP NHẬT - DECEMBER 2025
 
-**Cập nhật:** November 17, 2025 🎉 (Latest)
-**Milestone:** Phase 5 COMPLETE - MediaSoup SFU Full Bidirectional Video
+**Cập nhật:** December 7, 2025 🎉 (Latest)
+**Milestone:** Phase 6 IN PROGRESS - Live Translation Pipeline Integration
+
+> 📋 **Quick Links:**
+> - Work Log: `docs/wrap-ups/WORK-LOG-DEC2025.md`
+> - Previous Milestone: Phase 5 COMPLETE - MediaSoup SFU Full Bidirectional Video
 
 ---
 
@@ -9,34 +13,43 @@
 
 ### ✅ Đã hoàn thành (Phase 1-5): 🎉
 - ✅ Infrastructure: Docker Swarm 3 instances
-- ✅ STT Service: PhoWhisper + faster-whisper (working)
-- ✅ Translation Service: NLLB-600M (working)
-- ✅ TTS Service: XTTS v2 (working, 4 replicas)
+- ✅ STT Service: Sherpa-ONNX streaming (VI + EN)
+- ✅ Translation Service: VinAI + CTranslate2 (working)
+- ✅ TTS Service: **Piper TTS 2.0.1** (VI + EN, ONNX models)
 - ✅ Basic API endpoints (STT, Translation, TTS)
 - ✅ Full production stack (14/14 services deployed)
-- ✅ **Frontend v1.0.43** - Complete MediaSoup SFU implementation
-- ✅ **Gateway v1.0.7** - MediaSoup SFU with CORS fix
-- ✅ **IPv6 Dual-Stack** - Gateway 1.0.6-ipv6 deployed
+- ✅ **Frontend v2.0.16** - Auto-TTS, Barge-In, Declarative mute sync
+- ✅ **Gateway v2.0.6** - Per-participant VAD, Opus decode, Gateway ASR Hub
+- ✅ **IPv6 Dual-Stack** - All nodes deployed
 - ✅ **Full Bidirectional Video** - Host ↔ Join users working
 - ✅ **Consume Existing Producers** - Late join sees all participants
 
-### 🎯 Ưu tiên HIỆN TẠI (Phase 6):
-**Status**: ✅ **Phase 5 100% Complete** → **Ready for Phase 6**
+### 🎯 Ưu tiên HIỆN TẠI (Phase 6): 🔥 IN PROGRESS
+**Status**: ✅ **Phase 5 100% Complete** → **Phase 6 ~80% Complete**
 
 1. ✅ **Frontend Videocall UI** - DONE
-2. ✅ **MediaSoup Client Integration** - Frontend v1.0.43
-3. ✅ **Gateway Service (MediaSoup SFU)** - Gateway v1.0.7
-4. ✅ **Gateway API Compatibility** - 8 critical fixes completed
+2. ✅ **MediaSoup Client Integration** - Frontend v2.0.16
+3. ✅ **Gateway Service (MediaSoup SFU)** - Gateway v2.0.6
+4. ✅ **Gateway ASR Hub** - Centralized STT, Caption broadcast
 5. ✅ **Full Bidirectional Video** - Working perfectly
-6. ⏸️ **E2E WebRTC Testing** - Ready to start (HIGH PRIORITY)
-7. ⏸️ **Translation Pipeline Integration** - Next phase
-8. ⏸️ **Language Selection** - Pending integration
-9. ⏸️ **Live Captions** - Pending integration
-10. ⏸️ **Live Translation** - Pending integration
+6. ✅ **Live Captions** - Gateway caption events working
+7. ✅ **Live Translation** - VinAI translation pipeline working
+8. ✅ **TTS Playback** - Piper TTS with VI + EN voices
+9. ✅ **Barge-In (LocalVAD)** - Interrupt TTS when user speaks
+10. ✅ **Auto-TTS** - Auto toggle based on language pair
+11. ⏸️ **E2E Testing** - Pending final validation
 
-**Latest Achievement**: Complete MediaSoup SFU with consume existing producers  
-**Next Task**: E2E testing → Translation pipeline integration  
-**Details**: See `WRAP-UP-NOV17-MEDIASOUP-SFU-COMPLETE.md`
+**Latest Achievement (Dec 7, 2025):**
+- Per-participant VAD (fix crosstalk)
+- Opus decode error fixes
+- VAD parameter tuning for English
+- Piper TTS setup (VI + EN)
+- TTS mute logic (declarative pattern)
+- Auto-TTS based on language pair
+- LocalVAD sensitivity tuning
+
+**Next Task**: E2E testing → Production stabilization  
+**Details**: See `docs/wrap-ups/WORK-LOG-DEC2025.md`
 
 ### 🔬 Tối ưu sau khi MVP hoàn thành (Phase 7+):
 - Model upgrades (distil-whisper, Kokoro-82M, etc.)
@@ -45,7 +58,58 @@
 
 ---
 
-## 📊 PROGRESS UPDATE (November 17, 2025) 🎉 **LATEST**
+## 📊 PROGRESS UPDATE (December 7, 2025) 🎉 **LATEST**
+
+### **Phase 6 Progress: ~80% Complete** 🔥
+
+#### 🎉 Major Achievements (Dec 5-7, 2025):
+
+**1. Gateway Improvements (v2.0.4 → v2.0.6)**
+- Per-participant SileroVAD (fix crosstalk - caption gán nhầm người)
+- Opus decode error fixes (filter RTCP, DTX, padding packets)
+- VAD parameter tuning for English speech recognition
+- Rate-limited error logging
+
+**2. TTS Service (Piper v2.0.0 → v2.0.1)**
+- Setup Piper TTS with embedded ONNX models
+- Vietnamese: `vi_VN-vais1000-medium.onnx` (61MB)
+- English: `en_US-lessac-medium.onnx` (61MB)
+- CORS middleware for frontend access
+
+**3. Frontend Enhancements (v2.0.7 → v2.0.16)**
+- TTS mute logic fix (mute all on TTS enable)
+- TTS language output fix (use myLanguage)
+- LocalVAD sensitivity tuning (volumeThreshold 0.02→0.06)
+- Auto-TTS based on language pair
+- Declarative remote audio mute sync pattern
+- Manual override support for Auto-TTS
+
+**4. Architecture Improvements**
+- Gateway ASR Hub: Centralized STT at Gateway
+- Caption broadcast via Socket.io events
+- Server-side translation option
+- Barge-In feature (interrupt TTS when speaking)
+
+#### 📦 Current Production Images:
+```yaml
+frontend: jackboun11/jbcalling-frontend:2.0.16-sync-mute
+gateway: jackboun11/jbcalling-gateway:2.0.6-vad-tuned
+tts-piper: jackboun11/jbcalling-tts-piper:2.0.1-cors
+```
+
+#### ✅ Success Criteria Met:
+- ✅ Host creates room → produce video/audio
+- ✅ Join user consumes host's stream → sees host
+- ✅ Gateway STT → Captions displayed
+- ✅ Translation pipeline working (VinAI)
+- ✅ TTS playback with Piper (VI + EN)
+- ✅ Barge-In working (LocalVAD)
+- ✅ Auto-TTS based on language pair
+- ✅ Remote audio mute/unmute sync
+
+---
+
+## 📊 PROGRESS UPDATE (November 17, 2025)
 
 ### **Phase 5 Progress: 100% COMPLETE** ✅
 

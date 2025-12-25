@@ -1,0 +1,87 @@
+# ===========================================
+# Blackbox Exporter Configuration
+# JBCalling Translation System
+# Used for probing endpoints that don't export Prometheus metrics
+# Updated: December 9, 2025
+# ===========================================
+
+modules:
+  # ===========================================
+  # HTTP 2xx Check - Basic health check
+  # ===========================================
+  http_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      method: GET
+      valid_status_codes: [200, 201, 202, 204]
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      preferred_ip_protocol: "ip4"
+      ip_protocol_fallback: true
+      follow_redirects: true
+
+  # ===========================================
+  # HTTP Health JSON - For TTS and similar services
+  # Checks /health endpoint returns JSON with "healthy" status
+  # ===========================================
+  http_health_json:
+    prober: http
+    timeout: 10s
+    http:
+      method: GET
+      valid_status_codes: [200]
+      preferred_ip_protocol: "ip4"
+      fail_if_body_not_matches_regexp:
+        - '"status"\s*:\s*"healthy"'
+
+  # ===========================================
+  # HTTP POST Check - For API endpoints
+  # ===========================================
+  http_post:
+    prober: http
+    timeout: 15s
+    http:
+      method: POST
+      headers:
+        Content-Type: application/json
+      valid_status_codes: [200, 201, 202]
+      preferred_ip_protocol: "ip4"
+
+  # ===========================================
+  # TCP Port Check - Simple connectivity test
+  # ===========================================
+  tcp_connect:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: "ip4"
+
+  # ===========================================
+  # DNS Check
+  # ===========================================
+  dns_check:
+    prober: dns
+    timeout: 5s
+    dns:
+      query_name: "google.com"
+      query_type: "A"
+
+  # ===========================================
+  # ICMP Ping Check
+  # ===========================================
+  icmp_ping:
+    prober: icmp
+    timeout: 5s
+    icmp:
+      preferred_ip_protocol: "ip4"
+
+  # ===========================================
+  # WebSocket Check - For Gateway service
+  # ===========================================
+  http_websocket:
+    prober: http
+    timeout: 10s
+    http:
+      method: GET
+      valid_status_codes: [101, 200]
+      preferred_ip_protocol: "ip4"

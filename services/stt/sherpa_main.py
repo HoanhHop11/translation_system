@@ -39,6 +39,7 @@ audio_processor = AudioProcessor(target_sample_rate=16000)
 
 # Load Sherpa-ONNX models
 def load_offline_vi():
+  """Load Vietnamese Transducer model (offline)."""
   cfg = VIETNAMESE_MODEL
   return sherpa_onnx.OfflineRecognizer.from_transducer(
     tokens=f"{cfg.model_dir}/{cfg.tokens_path}",
@@ -52,26 +53,24 @@ def load_offline_vi():
   )
 
 
-def load_online_en():
+def load_offline_en():
+  """Load English NeMo Parakeet TDT 0.6B Transducer (hỗ trợ punctuation & capitalization)."""
   cfg = ENGLISH_MODEL
-  return sherpa_onnx.OnlineRecognizer.from_transducer(
+  return sherpa_onnx.OfflineRecognizer.from_transducer(
     tokens=f"{cfg.model_dir}/{cfg.tokens_path}",
     encoder=f"{cfg.model_dir}/{cfg.encoder_path}",
     decoder=f"{cfg.model_dir}/{cfg.decoder_path}",
     joiner=f"{cfg.model_dir}/{cfg.joiner_path}",
     num_threads=cfg.num_threads,
     provider=cfg.provider,
-    enable_endpoint_detection=cfg.enable_endpoint,
-    rule1_min_trailing_silence=cfg.rule1_min_trailing_silence,
-    rule2_min_trailing_silence=cfg.rule2_min_trailing_silence,
-    rule3_min_utterance_length=cfg.rule3_min_utterance_length,
     decoding_method=cfg.decoding_method,
     max_active_paths=cfg.max_active_paths,
+    model_type="nemo_transducer",  # CRITICAL: Use NeMo transducer branch, not generic transducer
   )
 
 
 offline_vi_recognizer = load_offline_vi()
-online_en_recognizer = load_online_en()
+offline_en_recognizer = load_offline_en()  # Đổi từ online sang offline
 
 
 class StreamingAudioRequest(BaseModel):
@@ -132,9 +131,7 @@ class StreamingSession:
     self.overlap: Optional[np.ndarray] = None
     self.buffer = []
     self.chunk_count = 0
-    self.stream = (
-      online_en_recognizer.create_stream() if self.language != "vi" else None
-    )
+    # Không cần stream nữa vì cả 2 model đều dùng offline mode
 
 
 sessions: Dict[str, StreamingSession] = {}
@@ -260,6 +257,7 @@ async def transcribe_vi_utterance(req: UtteranceTranscriptionRequest):
   - Expect: PCM16 base64, sample_rate ~16k (resample nếu cần).
   - Không giữ trạng thái streaming; mỗi request là một câu độc lập.
   """
+  start_time = time.time()  # Track processing time for metrics
   lang = get_language(req.language)
   if lang != "vi":
     raise HTTPException(status_code=400, detail="Only Vietnamese is supported for this endpoint")
@@ -302,7 +300,9 @@ async def transcribe_vi_utterance(req: UtteranceTranscriptionRequest):
       f"📝 [VI-OFFLINE] Utterance (participant={req.participant_id}, duration={duration_sec:.2f}s): '{text}'"
     )
 
+    processing_time = time.time() - start_time
     TRANSCRIPTION_COUNTER.labels(status="success", language=lang).inc()
+    TRANSCRIPTION_DURATION.observe(processing_time)
 
     return StreamingTranscriptionResponse(
       participant_id=req.participant_id,
@@ -325,6 +325,7 @@ async def transcribe_vi_utterance(req: UtteranceTranscriptionRequest):
 
 @app.post("/api/v1/transcribe-stream", response_model=StreamingTranscriptionResponse)
 async def transcribe_stream(req: StreamingAudioRequest):
+  start_time = time.time()  # Track processing time for metrics
   lang = get_language(req.language)
   session = sessions.get(req.participant_id)
   if session is None:
@@ -370,33 +371,29 @@ async def transcribe_stream(req: StreamingAudioRequest):
           f"duration={duration_sec:.2f}s: '{text}'"
         )
     else:
-      # English streaming (online recognizer)
-      stream = session.stream or online_en_recognizer.create_stream()
-      session.stream = stream
-      stream.accept_waveform(16000, processed_audio)
-      online_en_recognizer.decode_stream(stream)
-      result = online_en_recognizer.get_result(stream)
-
-      # sherpa-onnx có thể trả object với thuộc tính `.text` hoặc string thô
-      if hasattr(result, "text"):
-        text = result.text
+      # English: Sử dụng NeMo CTC Parakeet (Offline) - hỗ trợ punctuation & capitalization
+      # Gateway đã làm VAD → mỗi request là 1 utterance hoàn chỉnh
+      duration_sec = len(processed_audio) / 16000.0
+      if duration_sec < 0.35:
+        text = ""
+        is_final = True
       else:
-        text = str(result or "")
-      is_final = (
-        online_en_recognizer.is_endpoint(stream)
-        if ENGLISH_MODEL.enable_endpoint
-        else False
-      )
-      
-      # Log transcription result for debugging
-      if text:  # Only log non-empty results
-        logger.info(f"📝 [EN] Transcribed (participant={req.participant_id}, "
-                   f"chunk={session.chunk_count}, is_final={is_final}): '{text}'")
-      
-      if is_final:
-        online_en_recognizer.reset(stream)
+        # Dùng offline NeMo CTC recognizer (giống Vietnamese)
+        stream = offline_en_recognizer.create_stream()
+        stream.accept_waveform(16000, processed_audio)
+        offline_en_recognizer.decode_stream(stream)
+        result = stream.result
+        text = result.text if hasattr(result, "text") else str(result or "")
+        is_final = True
+        
+        logger.info(
+          f"📝 [EN-PARAKEET] participant={req.participant_id}, "
+          f"duration={duration_sec:.2f}s: '{text}'"
+        )
 
+    processing_time = time.time() - start_time
     TRANSCRIPTION_COUNTER.labels(status="success", language=lang).inc()
+    TRANSCRIPTION_DURATION.observe(processing_time)
 
     return StreamingTranscriptionResponse(
       participant_id=req.participant_id,

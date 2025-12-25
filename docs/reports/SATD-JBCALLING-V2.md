@@ -1,9 +1,45 @@
 # SYSTEM ARCHITECTURE & TECHNICAL DESIGN (SATD)
 # JBCALLING TRANSLATION REALTIME - CPU OPTIMIZED
 
-**Version:** 2.0 (CPU-Optimized Pipeline)
-**Date:** 19/11/2025
-**Status:** Active Development
+**Version:** 2.1 (CPU-Optimized Pipeline + Live Translation)
+**Date:** 07/12/2025 (December 7, 2025)
+**Status:** Active Development - Phase 6 (Live Translation Integration)
+
+---
+
+## 📅 VERSION HISTORY
+
+| Version | Date | Milestone | Key Changes |
+|:--------|:-----|:----------|:------------|
+| **2.1** | 07/12/2025 | Phase 6 - Live Translation | Piper TTS, Auto-TTS, Barge-In, Declarative mute |
+| 2.0 | 19/11/2025 | Phase 5 - MediaSoup SFU | Sherpa-ONNX, VinAI, Gateway ASR Hub |
+| 1.5 | 17/11/2025 | Phase 4-5 - WebRTC | MediaSoup SFU, IPv6 dual-stack |
+| 1.4 | 24/10/2025 | Phase 3 - AI Services | STT, Translation, TTS deployed |
+| 1.3 | 15/10/2025 | Phase 2 - SSL/HTTPS | Traefik, Let's Encrypt |
+| 1.2 | 06/10/2025 | Phase 1 - Infrastructure | Docker Swarm 3 nodes |
+| 1.1 | 05/10/2025 | Phase 1 - Setup | GCP instances created |
+| 1.0 | 01/10/2025 | Initial Design | Architecture planning |
+
+### 📆 Monthly Progress Summary
+
+**October 2025 (Tháng 10):**
+- 01/10: Initial system architecture design
+- 05/10: GCP instances created (translation01/02/03)
+- 06/10: Docker Swarm cluster initialized
+- 15/10: SSL/HTTPS deployed with Traefik
+- 24/10: AI Services (STT, Translation, TTS) deployed
+
+**November 2025 (Tháng 11):**
+- 17/11: MediaSoup SFU complete implementation
+- 19/11: SATD v2.0 - CPU-optimized pipeline design
+- 21/11: Frontend translation flow fixes
+- 24/11: Gateway ASR Hub implementation
+
+**December 2025 (Tháng 12):**
+- 02/12: Infrastructure migration & cleanup
+- 05/12: Barge-In feature, Language settings
+- 06/12: Server translations, Audio quality fixes
+- 07/12: Per-participant VAD, Piper TTS, Auto-TTS, Mute sync
 
 ---
 

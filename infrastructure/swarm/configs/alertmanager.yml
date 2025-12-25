@@ -1,0 +1,116 @@
+# ===========================================
+# Alertmanager Configuration - Production Grade
+# Updated: December 9, 2025
+# ===========================================
+
+global:
+  # ResolveTimeout - thời gian chờ để đánh dấu alert đã resolved
+  resolve_timeout: 5m
+  
+  # SMTP Configuration cho email alerts (placeholder - cần cập nhật)
+  # smtp_smarthost: 'smtp.gmail.com:587'
+  # smtp_from: 'alerts@jbcalling.site'
+  # smtp_auth_username: 'your-email@gmail.com'
+  # smtp_auth_password: 'your-app-password'
+
+# Templates cho custom notification format
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route tree - định nghĩa cách route alerts
+route:
+  # Default receiver nếu không match route nào
+  receiver: 'default-receiver'
+  
+  # Group alerts theo labels
+  group_by: ['alertname', 'service', 'severity']
+  
+  # Thời gian chờ trước khi gửi notification đầu tiên
+  group_wait: 30s
+  
+  # Thời gian chờ giữa các notifications của cùng group
+  group_interval: 5m
+  
+  # Thời gian lặp lại alert chưa resolved
+  repeat_interval: 4h
+
+  # Child routes cho các severity khác nhau
+  routes:
+    # Critical alerts - gửi ngay lập tức
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 10s
+      repeat_interval: 1h
+      continue: true
+      
+    # Warning alerts
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      group_wait: 1m
+      repeat_interval: 4h
+      
+    # AI Service specific alerts
+    - match_re:
+        service: (stt|translation|tts|gateway)
+      receiver: 'ai-service-alerts'
+      group_by: ['alertname', 'service']
+      
+    # Infrastructure alerts
+    - match_re:
+        service: (traefik|redis|prometheus|grafana)
+      receiver: 'infra-alerts'
+
+# Inhibition rules - suppress alerts khi có alerts khác
+inhibit_rules:
+  # Nếu node down thì suppress các service alerts trên node đó
+  - source_match:
+      alertname: NodeDown
+    target_match_re:
+      alertname: .+
+    equal: ['node']
+    
+  # Nếu có critical alert thì suppress warning của cùng service
+  - source_match:
+      severity: critical
+    target_match:
+      severity: warning
+    equal: ['alertname', 'service']
+
+# Receivers - định nghĩa nơi gửi alerts
+receivers:
+  # Default receiver - log to console (cho debugging)
+  - name: 'default-receiver'
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook'
+        send_resolved: true
+        # Placeholder - thay đổi khi có webhook server thực
+        
+  # Critical alerts - multiple channels
+  - name: 'critical-alerts'
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook/critical'
+        send_resolved: true
+    # Thêm email khi có config SMTP
+    # email_configs:
+    #   - to: 'admin@jbcalling.site'
+    #     send_resolved: true
+
+  # Warning alerts
+  - name: 'warning-alerts'
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook/warning'
+        send_resolved: true
+
+  # AI Service alerts
+  - name: 'ai-service-alerts'
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook/ai-services'
+        send_resolved: true
+
+  # Infrastructure alerts
+  - name: 'infra-alerts'
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook/infrastructure'
+        send_resolved: true

@@ -34,13 +34,13 @@ networks:
   frontend:
     driver: overlay
     driver_opts:
-      encrypted: "true"
+      encrypted: "false"
       com.docker.network.driver.mtu: "1410"
     attachable: true
   backend:
     driver: overlay
     driver_opts:
-      encrypted: "true"
+      encrypted: "false"
       com.docker.network.driver.mtu: "1410"
     attachable: true
 
@@ -61,6 +61,37 @@ volumes:
     driver: local
   traefik_certs:
     driver: local
+  alertmanager_data:
+    driver: local
+
+# ===========================================
+# Docker Configs - External Configuration Files
+# ===========================================
+configs:
+  prometheus_config:
+    file: ./configs/prometheus.yml
+  prometheus_node_rules:
+    file: ./configs/prometheus-rules/node-alerts.yml
+  prometheus_service_rules:
+    file: ./configs/prometheus-rules/service-alerts.yml
+  alertmanager_config:
+    file: ./configs/alertmanager.yml
+  loki_config:
+    file: ./configs/loki-config.yml
+  promtail_config_v2:
+    file: ./configs/promtail-config.yml
+  blackbox_config:
+    file: ./configs/blackbox.yml
+  grafana_datasources:
+    file: ./configs/grafana/provisioning/datasources/datasources.yml
+  grafana_dashboards_provision:
+    file: ./configs/grafana/provisioning/dashboards/dashboards.yml
+  grafana_dashboard_nodes:
+    file: ./configs/grafana/dashboards/node-overview.json
+  grafana_dashboard_ai:
+    file: ./configs/grafana/dashboards/ai-services.json
+  grafana_dashboard_logs:
+    file: ./configs/grafana/dashboards/loki-logs.json
 
 services:
   # ===========================================
@@ -148,7 +179,7 @@ services:
   # Docker Swarm có giới hạn về số lượng port mappings
   # ===========================================
   gateway:
-    image: jackboun11/jbcalling-gateway:2.0.2-asr-hub  # ASR Hub: Opus decode + RTP tap + Gateway caption events + per-room translation
+    image: jackboun11/jbcalling-gateway:2.0.6-vad-tuned  # FIX: RTCP filter, DTX skip, padding handling
     ports:
       - target: 40000
         published: 40000
@@ -236,8 +267,8 @@ services:
     environment:
       - PORT=3000
       - HOST=0.0.0.0
-      - ANNOUNCED_IP=34.143.235.114
-      - "ANNOUNCED_IPV6=2600:1900:4080:7c::"
+      - ANNOUNCED_IP=34.87.0.159
+      - "ANNOUNCED_IPV6=2600:1900:4080:470::1"
       - ENABLE_IPV6=true
       - NODE_ENV=production
       - CORS_ORIGIN=https://www.jbcalling.site,https://jbcalling.site
@@ -275,12 +306,14 @@ services:
         max_attempts: 3
       labels:
         - "traefik.enable=true"
-        - "traefik.docker.network=translation_frontend"
+        - "traefik.swarm.network=translation_frontend"
         - "traefik.http.routers.gateway.rule=Host(`webrtc.jbcalling.site`)"
         - "traefik.http.routers.gateway.entrypoints=websecure"
         - "traefik.http.routers.gateway.tls=true"
         - "traefik.http.routers.gateway.tls.certresolver=letsencrypt"
         - "traefik.http.services.gateway.loadbalancer.server.port=3000"
+        - "prometheus-job=gateway"
+        - "logging=promtail"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/health"]
       interval: 30s
@@ -293,7 +326,7 @@ services:
   # Frontend Service - MediaSoup SFU Client
   # ===========================================
   frontend:
-    image: jackboun11/jbcalling-frontend:latest
+    image: jackboun11/jbcalling-frontend:2.0.11-tts-lang-fix  # FIX: TTS uses myLanguage (user's language) not targetLanguage
     environment:
       - REACT_APP_GATEWAY_URL=https://webrtc.jbcalling.site  # Gateway NodeJS SFU (MediaSoup)
       - REACT_APP_SIGNALING_URL=https://api.jbcalling.site  # Signaling/Socket.IO server (fallback)
@@ -344,7 +377,7 @@ services:
           memory: 64M
       labels:
         - "traefik.enable=true"
-        - "traefik.docker.network=translation_frontend"
+        - "traefik.swarm.network=translation_frontend"
         - "traefik.http.routers.frontend.rule=Host(`jbcalling.site`) || Host(`www.jbcalling.site`)"
         - "traefik.http.routers.frontend.entrypoints=websecure"
         - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
@@ -429,7 +462,7 @@ services:
   # AI Services (No changes)
   # ===========================================
   stt:
-    image: jackboun11/jbcalling-stt:2.0.4-utterance-endpoint  # Utterance endpoint for offline VI + streaming EN + debug logging
+    image: jackboun11/jbcalling-stt:2.2.0-parakeet-tdt-0.6b  # EN: NeMo Parakeet TDT 0.6B Transducer (600M params)
     networks:
       - backend
       - frontend
@@ -441,7 +474,13 @@ services:
     depends_on:
       - redis
     deploy:
-      update_config: *default-update-config
+      # Custom update_config cho model 0.6B (cần stop-first vì model lớn ~2GB RAM)
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        monitor: 90s          # Tăng monitor time vì model load lâu hơn
+        order: stop-first     # CRITICAL: stop cũ trước để giải phóng RAM
       rollback_config: *default-rollback-config
       restart_policy: *default-restart-policy
       mode: replicated
@@ -452,17 +491,19 @@ services:
       resources:
         limits:
           cpus: '2.0'
-          memory: 3G        # Tăng từ 1.5G → 3G để tránh OOM kill
+          memory: 4G        # Tăng lên 4G cho model 0.6B (~2GB RAM khi load)
         reservations:
           cpus: '1.0'
-          memory: 2G        # Tăng từ 1G → 2G
+          memory: 2.5G      # Tăng lên 2.5G
       labels:
         - "traefik.enable=true"
-        - "traefik.docker.network=translation_frontend"
+        - "traefik.swarm.network=translation_frontend"
         - "traefik.http.routers.stt.rule=Host(`stt.jbcalling.site`)"
         - "traefik.http.routers.stt.entrypoints=websecure"
         - "traefik.http.routers.stt.tls.certresolver=letsencrypt"
         - "traefik.http.services.stt.loadbalancer.server.port=8002"
+        - "prometheus-job=stt"
+        - "logging=promtail"
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8002/health\")' || exit 1"]
       interval: 30s
@@ -505,11 +546,13 @@ services:
           memory: 1G     # Giảm từ 3G xuống 1G
       labels:
         - "traefik.enable=true"
-        - "traefik.docker.network=translation_frontend"
+        - "traefik.swarm.network=translation_frontend"
         - "traefik.http.routers.translation.rule=Host(`translation.jbcalling.site`)"
         - "traefik.http.routers.translation.entrypoints=websecure"
         - "traefik.http.routers.translation.tls.certresolver=letsencrypt"
         - "traefik.http.services.translation.loadbalancer.server.port=8005"
+        - "prometheus-job=translation"
+        - "logging=promtail"
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8005/health\")' || exit 1"]
       interval: 30s
@@ -518,8 +561,12 @@ services:
       start_period: 60s
     logging: *default-logging
 
+  # ===========================================
+  # TTS Piper Service - Vietnamese + English
+  # Models embedded in image: vi_VN-vais1000-medium, en_US-lessac-medium
+  # ===========================================
   tts_translation02:
-    image: ${DOCKER_REGISTRY:-local}/jbcalling-tts-piper:latest
+    image: jackboun11/jbcalling-tts-piper:2.0.1-cors  # Piper TTS with embedded models
     networks:
       - backend
       - frontend
@@ -528,10 +575,7 @@ services:
       - PIPER_CONFIG_VI=/models/piper/vi_VN-vais1000-medium.onnx.json
       - PIPER_MODEL_EN=/models/piper/en_US-lessac-medium.onnx
       - PIPER_CONFIG_EN=/models/piper/en_US-lessac-medium.onnx.json
-      - OPENVOICE_BASE_DIR=/models/openvoice/base
-      - OPENVOICE_TCC_DIR=/models/openvoice/tcc
-    volumes:
-      - tts_models:/models
+    # NOTE: Models are embedded in image, no volume needed
     depends_on:
       - redis
     deploy:
@@ -552,11 +596,13 @@ services:
           memory: 1G
       labels:
         - "traefik.enable=true"
-        - "traefik.docker.network=translation_frontend"
+        - "traefik.swarm.network=translation_frontend"
         - "traefik.http.routers.tts.rule=Host(`tts.jbcalling.site`)"
         - "traefik.http.routers.tts.entrypoints=websecure"
         - "traefik.http.routers.tts.tls.certresolver=letsencrypt"
         - "traefik.http.services.tts.loadbalancer.server.port=8004"
+        - "prometheus-job=tts"
+        - "logging=promtail"
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8004/health\")' || exit 1"]
       interval: 30s
@@ -566,7 +612,7 @@ services:
     logging: *default-logging
 
   tts_translation03:
-    image: ${DOCKER_REGISTRY:-local}/jbcalling-tts-piper:latest
+    image: jackboun11/jbcalling-tts-piper:2.0.1-cors  # Piper TTS with embedded models
     networks:
       - backend
       - frontend
@@ -575,10 +621,7 @@ services:
       - PIPER_CONFIG_VI=/models/piper/vi_VN-vais1000-medium.onnx.json
       - PIPER_MODEL_EN=/models/piper/en_US-lessac-medium.onnx
       - PIPER_CONFIG_EN=/models/piper/en_US-lessac-medium.onnx.json
-      - OPENVOICE_BASE_DIR=/models/openvoice/base
-      - OPENVOICE_TCC_DIR=/models/openvoice/tcc
-    volumes:
-      - tts_models:/models
+    # NOTE: Models are embedded in image, no volume needed
     depends_on:
       - redis
     deploy:
@@ -609,12 +652,12 @@ services:
   # Infrastructure Services
   # ===========================================
   traefik:
-    image: traefik:v2.10
+    image: traefik:v3.6
     command:
       - "--api.dashboard=true"
-      - "--providers.docker.swarmMode=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--providers.docker.network=translation_frontend"
+      - "--providers.swarm.endpoint=unix:///var/run/docker.sock"
+      - "--providers.swarm.exposedByDefault=false"
+      - "--providers.swarm.network=translation_frontend"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
       - "--certificatesresolvers.letsencrypt.acme.email=hopboy2003@gmail.com"
@@ -659,18 +702,40 @@ services:
         - "traefik.http.services.traefik.loadbalancer.server.port=8080"
     logging: *default-logging
 
-  # Monitoring stack (unchanged)
+  # ===========================================
+  # MONITORING STACK - Production Grade
+  # Updated: December 9, 2025
+  # Components: Prometheus, Grafana, Loki, Promtail,
+  #             Alertmanager, Node Exporter, cAdvisor, Redis Exporter
+  # ===========================================
+
+  # ===========================================
+  # Prometheus - Metrics Collection & Alerting
+  # ===========================================
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.54.1
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
       - '--storage.tsdb.retention.time=30d'
+      - '--storage.tsdb.retention.size=10GB'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
     networks:
       - backend
+      - frontend
     volumes:
       - prometheus_data:/prometheus
-      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    configs:
+      - source: prometheus_config
+        target: /etc/prometheus/prometheus.yml
+      - source: prometheus_node_rules
+        target: /etc/prometheus/rules/node-alerts.yml
+      - source: prometheus_service_rules
+        target: /etc/prometheus/rules/service-alerts.yml
     deploy:
       mode: replicated
       replicas: 1
@@ -679,25 +744,104 @@ services:
           - node.role == manager
       resources:
         limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
           cpus: '0.5'
           memory: 1G
-        reservations:
-          cpus: '0.25'
-          memory: 512M
+      labels:
+        - "traefik.enable=true"
+        - "traefik.swarm.network=translation_frontend"
+        - "traefik.http.routers.prometheus.rule=Host(`prometheus.jbcalling.site`)"
+        - "traefik.http.routers.prometheus.entrypoints=websecure"
+        - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
+        - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+        - "prometheus-job=prometheus"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     logging: *default-logging
 
+  # ===========================================
+  # Alertmanager - Alert Routing & Notification
+  # ===========================================
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=https://alertmanager.jbcalling.site'
+    networks:
+      - backend
+      - frontend
+    volumes:
+      - alertmanager_data:/alertmanager
+    configs:
+      - source: alertmanager_config
+        target: /etc/alertmanager/alertmanager.yml
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+      labels:
+        - "traefik.enable=true"
+        - "traefik.swarm.network=translation_frontend"
+        - "traefik.http.routers.alertmanager.rule=Host(`alertmanager.jbcalling.site`)"
+        - "traefik.http.routers.alertmanager.entrypoints=websecure"
+        - "traefik.http.routers.alertmanager.tls.certresolver=letsencrypt"
+        - "traefik.http.services.alertmanager.loadbalancer.server.port=9093"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9093/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging: *default-logging
+
+  # ===========================================
+  # Grafana - Visualization & Dashboards
+  # ===========================================
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.3.0
     networks:
       - backend
       - frontend
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_INSTALL_PLUGINS=redis-datasource
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=JBCalling2025!
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=https://grafana.jbcalling.site
+      - GF_INSTALL_PLUGINS=redis-datasource,grafana-clock-panel,grafana-piechart-panel
+      - GF_ALERTING_ENABLED=true
+      - GF_UNIFIED_ALERTING_ENABLED=true
+      - GF_FEATURE_TOGGLES_ENABLE=publicDashboards
     volumes:
       - grafana_data:/var/lib/grafana
+    configs:
+      - source: grafana_datasources
+        target: /etc/grafana/provisioning/datasources/datasources.yml
+      - source: grafana_dashboards_provision
+        target: /etc/grafana/provisioning/dashboards/dashboards.yml
+      - source: grafana_dashboard_nodes
+        target: /var/lib/grafana/dashboards/node-overview.json
+      - source: grafana_dashboard_ai
+        target: /var/lib/grafana/dashboards/ai-services.json
+      - source: grafana_dashboard_logs
+        target: /var/lib/grafana/dashboards/loki-logs.json
     depends_on:
       - prometheus
+      - loki
     deploy:
       mode: replicated
       replicas: 1
@@ -713,19 +857,32 @@ services:
           memory: 256M
       labels:
         - "traefik.enable=true"
+        - "traefik.swarm.network=translation_frontend"
         - "traefik.http.routers.grafana.rule=Host(`grafana.jbcalling.site`)"
         - "traefik.http.routers.grafana.entrypoints=websecure"
         - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
         - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     logging: *default-logging
 
+  # ===========================================
+  # Loki - Log Aggregation
+  # ===========================================
   loki:
-    image: grafana/loki:latest
-    command: -config.file=/etc/loki/local-config.yaml
+    image: grafana/loki:3.2.1
+    command: -config.file=/etc/loki/loki-config.yml
     networks:
       - backend
     volumes:
       - loki_data:/loki
+    configs:
+      - source: loki_config
+        target: /etc/loki/loki-config.yml
     deploy:
       mode: replicated
       replicas: 1
@@ -735,10 +892,176 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 512M
+          memory: 1G
         reservations:
           cpus: '0.25'
+          memory: 512M
+      labels:
+        - "prometheus-job=loki"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3100/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+
+  # ===========================================
+  # Promtail - Log Collection Agent (Global)
+  # Chạy trên mỗi node để thu thập logs
+  # ===========================================
+  promtail:
+    image: grafana/promtail:3.2.1
+    command: -config.file=/etc/promtail/promtail-config.yml
+    networks:
+      - backend
+    volumes:
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    configs:
+      - source: promtail_config_v2
+        target: /etc/promtail/promtail-config.yml
+    depends_on:
+      - loki
+    deploy:
+      mode: global
+      resources:
+        limits:
+          cpus: '0.25'
           memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    logging: *default-logging
+
+  # ===========================================
+  # Node Exporter - System Metrics (Global)
+  # Chạy trên mỗi node để thu thập metrics hệ thống
+  # ===========================================
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      - '--collector.textfile.directory=/etc/node-exporter/'
+      - '--web.listen-address=:9100'
+    networks:
+      - backend
+    ports:
+      - target: 9100
+        published: 9100
+        protocol: tcp
+        mode: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    deploy:
+      mode: global
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+      labels:
+        - "prometheus-job=node-exporter"
+    logging: *default-logging
+
+  # ===========================================
+  # cAdvisor - Container Metrics (Global)
+  # Chạy trên mỗi node để thu thập container metrics
+  # ===========================================
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    command:
+      - '-docker_only=true'
+      - '-housekeeping_interval=30s'
+      - '-disable_metrics=percpu,sched,tcp,udp,disk,diskIO,hugetlb,referenced_memory,cpu_topology,resctrl'
+    networks:
+      - backend
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    ports:
+      - target: 8080
+        published: 8080
+        protocol: tcp
+        mode: host
+    deploy:
+      mode: global
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+      labels:
+        - "prometheus-job=cadvisor"
+    logging: *default-logging
+
+  # ===========================================
+  # Redis Exporter - Redis Metrics
+  # ===========================================
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.63.0
+    networks:
+      - backend
+    environment:
+      - REDIS_ADDR=redis:6379
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+      labels:
+        - "prometheus-job=redis-exporter"
+    logging: *default-logging
+
+  # ===========================================
+  # Blackbox Exporter - Probe endpoints without /metrics
+  # Used for TTS, external URLs, TCP checks
+  # ===========================================
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    networks:
+      - backend
+    configs:
+      - source: blackbox_config
+        target: /etc/blackbox_exporter/config.yml
+    command:
+      - '--config.file=/etc/blackbox_exporter/config.yml'
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+      labels:
+        - "prometheus-job=blackbox-exporter"
     logging: *default-logging
 
   # ===========================================

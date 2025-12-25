@@ -1,0 +1,17 @@
+# ===========================================
+# Grafana Dashboard Provisioning
+# Tự động load dashboards từ folder
+# Updated: December 9, 2025
+# ===========================================
+
+apiVersion: 1
+
+providers:
+  - name: 'JBCalling Dashboards'
+    orgId: 1
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards

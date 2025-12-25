@@ -1,0 +1,1 @@
+{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"redis_memory_max_bytes","instance":"redis-exporter:9121","job":"redis","service":"redis","type":"cache"},"value":[1765351407.481,"536870912"]}]}}
